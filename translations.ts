@@ -237,6 +237,11 @@ export const translations = {
     intakeFormPrintPdf: '인쇄/PDF',
     intakeFormPreviewTitle: '프로젝트 요구사항 정의서',
 
+    // ── Calendar Timeline ──
+    calendarTimeline: '캘린더 타임라인',
+    calendarDays: ['일', '월', '화', '수', '목', '금', '토'],
+    sprintLabel: '스프린트',
+
     // ── Mobile panel toggle ──
     switchToResult: '결과 보기',
     switchToChat: '채팅으로',
@@ -475,6 +480,11 @@ export const translations = {
     intakeFormBackToForm: 'Back to Form',
     intakeFormPrintPdf: 'Print/PDF',
     intakeFormPreviewTitle: 'Project Requirements Document',
+
+    // ── Calendar Timeline ──
+    calendarTimeline: 'Calendar Timeline',
+    calendarDays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    sprintLabel: 'Sprint',
 
     // ── Mobile panel toggle ──
     switchToResult: 'View Results',

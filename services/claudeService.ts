@@ -81,7 +81,7 @@ export const generateImplementationPlan = async (
 4. 기존 기술 환경/제약: ${tech}
 5. 최종 KPI 목표: ${goal}
 ${additionalContext.length > 0 ? `\n[추가 컨텍스트]\n${additionalContext.join('\n')}` : ''}
-${timeline ? `\n[개발 일정 제약]\n희망 완료 시점: ${timeline}\n스프린트 계획과 배포 일정을 이 기간 내에 맞추세요.` : ''}
+${timeline ? `\n[개발 일정 제약]\n희망 완료 시점: ${timeline}\n\n**절대 규칙**: 일정이 아무리 짧더라도 시스템의 기능, 구조, 모듈, API, DB 스키마를 절대 줄이거나 생략하지 마세요. 모든 설계 내용은 동일하게 유지하되, 스프린트 기간만 압축하세요.\n- 필요하면 스프린트를 1일, 2일, 3일 단위로 나눠도 됩니다.\n- 병렬 개발 가능한 작업은 동시 진행으로 계획하세요.\n- 로드맵의 모든 단계를 지정된 기간 내에 배치하세요.` : ''}
 ${techRefContext ? `\n[기술 스택 레퍼런스 — 공식 문서 기반]\n아래는 사용자의 기술 환경에 매칭되는 공식 문서의 최신 패턴입니다. 코드 생성 시 반드시 이 패턴을 참고하세요:\n\n${techRefContext}\n` : ''}
 ${langText}
 
@@ -128,8 +128,8 @@ RESTful 표준. 최소 15개 이상의 실제 엔드포인트.
 각 항목: name, description, file(경로), language, code
 
 **[스프린트 계획]** (sprintPlan 배열)
-${timeline ? `사용자 희망 일정(${timeline}) 내에 완료할 수 있도록 스프린트를 구성하세요.` : '2주 단위 스프린트.'} 각 스프린트별:
-- sprint(번호), title(스프린트 목표), duration("2주: YYYY.MM.DD ~ YYYY.MM.DD")
+${timeline ? `사용자 희망 일정(${timeline}) 내에 완료할 수 있도록 스프린트를 구성하세요. 일정이 매우 짧더라도 기능을 빼지 말고 스프린트 단위를 1일~3일로 줄여서라도 모든 기능을 포함하세요. 병렬 진행 가능한 작업은 같은 스프린트에 배치하세요.` : '2주 단위 스프린트.'} 각 스프린트별:
+- sprint(번호), title(스프린트 목표), duration("기간: YYYY.MM.DD ~ YYYY.MM.DD" — 일정 제약에 따라 1일~2주 유동적)
 - goals(해당 스프린트 목표 목록), deliverables(산출물), dependencies(선행 조건)
 
 **[배포 계획]** (deploymentPlan 필드, 마크다운)

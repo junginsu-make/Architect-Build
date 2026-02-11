@@ -331,6 +331,166 @@ const SectionTitle: React.FC<{ children: React.ReactNode; badge?: string; badgeC
   </div>
 );
 
+/* ── Calendar Timeline ── */
+const SPRINT_COLORS = [
+  { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
+  { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', dot: 'bg-purple-500' },
+  { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' },
+  { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
+  { bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200', dot: 'bg-rose-500' },
+  { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200', dot: 'bg-cyan-500' },
+  { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200', dot: 'bg-indigo-500' },
+  { bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-teal-200', dot: 'bg-teal-500' },
+  { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
+  { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-pink-200', dot: 'bg-pink-500' },
+];
+
+function parseDateRange(duration: string): { start: Date; end: Date } | null {
+  const datePattern = /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/g;
+  const matches = [...duration.matchAll(datePattern)];
+  if (matches.length >= 2) {
+    const start = new Date(+matches[0][1], +matches[0][2] - 1, +matches[0][3]);
+    const end = new Date(+matches[1][1], +matches[1][2] - 1, +matches[1][3]);
+    return { start, end };
+  }
+  return null;
+}
+
+interface SprintDateRange {
+  sprint: number;
+  title: string;
+  start: Date;
+  end: Date;
+  colorIdx: number;
+}
+
+const CalendarTimeline: React.FC<{
+  sprintPlan: { sprint: number; title: string; duration: string }[];
+  lang: Language;
+}> = ({ sprintPlan, lang }) => {
+  const t = translations[lang];
+  const dayHeaders: string[] = t.calendarDays;
+  const monthNames = lang === Language.KO
+    ? ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
+    : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const sprintRanges: SprintDateRange[] = [];
+  sprintPlan.forEach((sp, idx) => {
+    const range = parseDateRange(sp.duration);
+    if (range) {
+      sprintRanges.push({ sprint: sp.sprint, title: sp.title, start: range.start, end: range.end, colorIdx: idx % SPRINT_COLORS.length });
+    }
+  });
+
+  if (sprintRanges.length === 0) return null;
+
+  const allDates = sprintRanges.flatMap(r => [r.start, r.end]);
+  const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+
+  const months: { year: number; month: number }[] = [];
+  let cur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+  const lastMonth = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
+  while (cur <= lastMonth) {
+    months.push({ year: cur.getFullYear(), month: cur.getMonth() });
+    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+  }
+
+  const getSprintForDate = (date: Date): SprintDateRange | null => {
+    const ts = date.getTime();
+    for (const sr of sprintRanges) {
+      if (ts >= sr.start.getTime() && ts <= sr.end.getTime()) return sr;
+    }
+    return null;
+  };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return (
+    <div className="mb-6 bg-white rounded-xl border border-slate-200 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-blue-600">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+        </svg>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t.calendarTimeline}</p>
+      </div>
+
+      {/* Sprint Legend */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {sprintRanges.map((sr) => {
+          const c = SPRINT_COLORS[sr.colorIdx];
+          return (
+            <div key={sr.sprint} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold ${c.bg} ${c.text} border ${c.border}`}>
+              <span className={`w-2 h-2 rounded-full ${c.dot}`}></span>
+              {t.sprintLabel || 'Sprint'} {sr.sprint}: {sr.title}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Calendar Months Grid */}
+      <div className={`grid gap-4 ${months.length === 1 ? 'grid-cols-1' : months.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'}`}>
+        {months.map(({ year, month }) => {
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          const startDow = new Date(year, month, 1).getDay();
+          const cells: React.ReactNode[] = [];
+
+          for (let i = 0; i < startDow; i++) {
+            cells.push(<div key={`e-${i}`} className="h-7"></div>);
+          }
+
+          for (let d = 1; d <= daysInMonth; d++) {
+            const date = new Date(year, month, d);
+            const sprint = getSprintForDate(date);
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            const isToday = date.getTime() === today.getTime();
+            const c = sprint ? SPRINT_COLORS[sprint.colorIdx] : null;
+
+            cells.push(
+              <div
+                key={d}
+                className={`h-7 flex items-center justify-center rounded-md text-[10px] font-medium transition-colors ${
+                  isToday
+                    ? 'ring-2 ring-blue-500 ring-offset-1 font-black'
+                    : ''
+                } ${
+                  c
+                    ? `${c.bg} ${c.text} font-bold`
+                    : isWeekend
+                      ? 'text-slate-300'
+                      : 'text-slate-400'
+                }`}
+                title={sprint ? `${t.sprintLabel || 'Sprint'} ${sprint.sprint}: ${sprint.title}` : ''}
+              >
+                {d}
+              </div>
+            );
+          }
+
+          return (
+            <div key={`${year}-${month}`} className="bg-slate-50/50 rounded-lg p-3 border border-slate-100">
+              <p className="text-xs font-bold text-slate-700 mb-2 text-center">
+                {year}. {monthNames[month]}
+              </p>
+              <div className="grid grid-cols-7 gap-0.5 mb-1">
+                {dayHeaders.map((dh, i) => (
+                  <div key={dh} className={`text-center text-[9px] font-bold py-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-slate-400'}`}>
+                    {dh}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-0.5">
+                {cells}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 /* ══════════════════════════════════════════════════════════
    Main Panel
    ══════════════════════════════════════════════════════════ */
@@ -638,6 +798,9 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
                       ))}
                     </div>
                   </div>
+
+                  {/* Calendar Timeline */}
+                  <CalendarTimeline sprintPlan={blueprint.implementationPlan!.sprintPlan} lang={lang} />
 
                   {/* Timeline line */}
                   <div className="absolute left-[23px] top-[120px] bottom-6 w-0.5 bg-gradient-to-b from-blue-400 via-blue-300 to-slate-200 rounded-full"></div>
