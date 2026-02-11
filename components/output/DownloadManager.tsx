@@ -13,24 +13,25 @@ interface DownloadManagerProps {
 const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [reportLang, setReportLang] = useState<Language>(lang);
 
   const handleClientHtmlDownload = () => {
-    const html = generateClientReportHtml(blueprint);
+    const html = generateClientReportHtml(blueprint, reportLang);
     downloadHtml(html, 'client-proposal.html');
   };
 
   const handleDeveloperHtmlDownload = () => {
-    const html = generateDeveloperReportHtml(blueprint);
+    const html = generateDeveloperReportHtml(blueprint, reportLang);
     downloadHtml(html, 'developer-docs.html');
   };
 
   const handlePrintClient = () => {
-    const html = generateClientReportHtml(blueprint);
+    const html = generateClientReportHtml(blueprint, reportLang);
     printReport(html);
   };
 
   const handlePrintDeveloper = () => {
-    const html = generateDeveloperReportHtml(blueprint);
+    const html = generateDeveloperReportHtml(blueprint, reportLang);
     printReport(html);
   };
 
@@ -56,35 +57,36 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
       // ── client/ ──
       if (blueprint.clientProposal) {
         const cp = blueprint.clientProposal;
+        const isKo = reportLang === Language.KO;
         const proposalMd = [
-          `# 프로젝트 제안서`,
+          `# ${isKo ? '프로젝트 제안서' : 'Project Proposal'}`,
           ``,
-          `## 문제 정의`,
+          `## ${isKo ? '문제 정의' : 'Problem Statement'}`,
           cp.problemStatement,
           ``,
-          `## 솔루션 개요`,
+          `## ${isKo ? '솔루션 개요' : 'Solution Overview'}`,
           cp.solutionOverview,
           ``,
-          `## 핵심 기능`,
+          `## ${isKo ? '핵심 기능' : 'Key Features'}`,
           ...cp.keyFeatures.map((f) => `- ${f}`),
           ``,
-          `## 프로젝트 마일스톤`,
+          `## ${isKo ? '프로젝트 마일스톤' : 'Project Milestones'}`,
           ``,
-          `| 단계 | 기간 | 산출물 |`,
+          `| ${isKo ? '단계' : 'Phase'} | ${isKo ? '기간' : 'Duration'} | ${isKo ? '산출물' : 'Outcome'} |`,
           `|------|------|--------|`,
           ...cp.milestones.map((m) => `| ${m.phase} | ${m.duration} | ${m.outcome} |`),
           ``,
-          `## 기대 효과`,
+          `## ${isKo ? '기대 효과' : 'Expected Outcomes'}`,
           cp.expectedOutcomes,
           ``,
-          `## 데이터 보호 방안`,
+          `## ${isKo ? '데이터 보호 방안' : 'Data Protection'}`,
           cp.dataProtection,
           ``,
-          `## 투자 요약`,
+          `## ${isKo ? '투자 요약' : 'Investment Summary'}`,
           cp.investmentSummary,
         ].join('\n');
         zip.file('client/proposal.md', proposalMd);
-        zip.file('client/proposal.html', generateClientReportHtml(blueprint));
+        zip.file('client/proposal.html', generateClientReportHtml(blueprint, reportLang));
       }
 
       // ── developer/ ──
@@ -103,24 +105,25 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
 
         // Sprint Plan
         if (impl.sprintPlan?.length) {
+          const isKo = reportLang === Language.KO;
           const sprintMd = [
-            `# 스프린트 계획`,
+            `# ${isKo ? '스프린트 계획' : 'Sprint Plan'}`,
             ``,
             ...impl.sprintPlan.flatMap((s) => [
               `## Sprint ${s.sprint}: ${s.title}`,
               ``,
-              `**기간:** ${s.duration}`,
+              `**${isKo ? '기간' : 'Duration'}:** ${s.duration}`,
               ``,
-              `### 목표`,
+              `### ${isKo ? '목표' : 'Goals'}`,
               ...s.goals.map((g) => `- ${g}`),
               ``,
-              `### 산출물`,
+              `### ${isKo ? '산출물' : 'Deliverables'}`,
               ...s.deliverables.map((d) => `- ${d}`),
               ``,
-              `### 의존성`,
+              `### ${isKo ? '의존성' : 'Dependencies'}`,
               ...(s.dependencies.length > 0
                 ? s.dependencies.map((dep) => `- ${dep}`)
-                : [`- 없음`]),
+                : [`- ${isKo ? '없음' : 'None'}`]),
               ``,
               `---`,
               ``,
@@ -129,24 +132,40 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
           zip.file('developer/sprint-plan.md', sprintMd);
         }
 
+        // Deployment Plan
+        if (impl.deploymentPlan) {
+          const isKo = reportLang === Language.KO;
+          zip.file('developer/deployment-plan.md', `# ${isKo ? '배포 계획' : 'Deployment Plan'}\n\n${impl.deploymentPlan}`);
+        }
+
+        // Testing Strategy
+        if (impl.testingStrategy) {
+          const isKo = reportLang === Language.KO;
+          zip.file('developer/testing-strategy.md', `# ${isKo ? '테스트 전략' : 'Testing Strategy'}\n\n${impl.testingStrategy}`);
+        }
+
         // API Spec
         if (impl.apiDesign?.length) {
+          const isKo = reportLang === Language.KO;
           const apiMd = [
-            `# API 명세서`,
+            `# ${isKo ? 'API 명세서' : 'API Specification'}`,
             ``,
-            `## 엔드포인트 목록`,
+            `## ${isKo ? '엔드포인트 목록' : 'Endpoint List'}`,
             ``,
-            `| 메서드 | 경로 | 설명 | 인증 |`,
+            `| ${isKo ? '메서드' : 'Method'} | ${isKo ? '경로' : 'Path'} | ${isKo ? '설명' : 'Description'} | ${isKo ? '인증' : 'Auth'} |`,
             `|--------|------|------|------|`,
-            ...impl.apiDesign.map((a) => `| ${a.method} | \`${a.path}\` | ${a.description} | ${a.auth ? '필요' : '공개'} |`),
+            ...impl.apiDesign.map((a) => `| ${a.method} | \`${a.path}\` | ${a.description} | ${a.auth ? (isKo ? '필요' : 'Required') : (isKo ? '공개' : 'Public')} |`),
             ``,
-            `## 상세 설명`,
+            `## ${isKo ? '상세 설명' : 'Details'}`,
             ``,
             ...impl.apiDesign.flatMap((a) => [
               `### \`${a.method} ${a.path}\``,
               ``,
-              `- **설명:** ${a.description}`,
-              `- **인증:** ${a.auth ? '필요' : '공개'}`,
+              `- **${isKo ? '설명' : 'Description'}:** ${a.description}`,
+              `- **${isKo ? '인증' : 'Auth'}:** ${a.auth ? (isKo ? '필요' : 'Required') : (isKo ? '공개' : 'Public')}`,
+              ...(a.requestBody ? [``, `#### ${isKo ? '요청 본문' : 'Request Body'}`, '```json', a.requestBody, '```'] : []),
+              ...(a.responseBody ? [``, `#### ${isKo ? '응답' : 'Response'}`, '```json', a.responseBody, '```'] : []),
+              ...(a.errorCodes?.length ? [``, `#### ${isKo ? '에러 코드' : 'Error Codes'}`, ...a.errorCodes.map(c => `- \`${c}\``)] : []),
               ``,
             ]),
           ].join('\n');
@@ -155,15 +174,16 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
 
         // DB Schema
         if (impl.databaseDesign?.length) {
+          const isKo = reportLang === Language.KO;
           const dbMd = [
-            `# 데이터베이스 스키마`,
+            `# ${isKo ? '데이터베이스 스키마' : 'Database Schema'}`,
             ``,
             ...impl.databaseDesign.flatMap((table) => [
               `## ${table.name}`,
               ``,
               table.description,
               ``,
-              `| 컬럼 | 타입 | 제약 |`,
+              `| ${isKo ? '컬럼' : 'Column'} | ${isKo ? '타입' : 'Type'} | ${isKo ? '제약' : 'Constraint'} |`,
               `|------|------|------|`,
               ...table.columns.map((c) => `| ${c.name} | ${c.type} | ${c.constraint} |`),
               ``,
@@ -175,8 +195,17 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
         // Implementation JSON (full structured data)
         zip.file('developer/implementation.json', JSON.stringify(impl, null, 2));
 
+        // Individual source files for key modules
+        if (impl.keyModules?.length) {
+          for (const mod of impl.keyModules) {
+            // Use the file path from the module, placing under developer/src/
+            const filePath = mod.file.startsWith('/') ? mod.file.slice(1) : mod.file;
+            zip.file(`developer/src/${filePath}`, mod.code);
+          }
+        }
+
         // Developer HTML report
-        zip.file('developer/full-report.html', generateDeveloperReportHtml(blueprint));
+        zip.file('developer/full-report.html', generateDeveloperReportHtml(blueprint, reportLang));
       }
 
       // ── diagrams/ ──
@@ -191,38 +220,29 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
       }
 
       // ── report.md (root) ──
+      const isKoReport = reportLang === Language.KO;
       const mdContent = [
-        `# 아키텍트 설계 보고서`,
+        `# ${isKoReport ? '아키텍트 설계 보고서' : 'Architect Design Report'}`,
         ``,
-        `## 실행 로드맵`,
+        `## ${isKoReport ? '실행 로드맵' : 'Execution Roadmap'}`,
         ...blueprint.roadmap.map((step, i) => `${i + 1}. ${step}`),
         ``,
-        `## 분석 요약`,
+        `## ${isKoReport ? '분석 요약' : 'Analysis Summary'}`,
         blueprint.analysisSummary,
         ``,
-        `## 예상 ROI`,
+        `## ${isKoReport ? '예상 ROI' : 'Estimated ROI'}`,
         blueprint.estimatedROI,
         ``,
-        `## 보안 전략`,
+        `## ${isKoReport ? '보안 전략' : 'Security Strategy'}`,
         blueprint.securityStrategy,
         ``,
         ...(blueprint.sources?.length
-          ? [`## 참고 자료`, ...blueprint.sources
+          ? [`## ${isKoReport ? '참고 자료' : 'References'}`, ...blueprint.sources
               .filter((s) => { try { const u = new URL(s.uri); return u.protocol === 'https:' || u.protocol === 'http:'; } catch { return false; } })
               .map((s) => `- [${s.title}](${s.uri})`)]
           : []),
       ].join('\n');
       zip.file('report.md', mdContent);
-
-      // ── logo.png (root) ──
-      if (blueprint.projectLogoBase64 && /^[A-Za-z0-9+/=]+$/.test(blueprint.projectLogoBase64)) {
-        try {
-          const logoData = Uint8Array.from(atob(blueprint.projectLogoBase64), (c) => c.charCodeAt(0));
-          zip.file('logo.png', logoData);
-        } catch {
-          console.warn('Logo Base64 decoding failed, skipping logo in ZIP');
-        }
-      }
 
       const blob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(blob);
@@ -248,6 +268,10 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
     printDev: '개발자용 인쇄',
     zip: 'ZIP 전체 다운로드',
     json: 'JSON 원본',
+    docDownload: '문서 다운로드',
+    print: '인쇄',
+    fullExport: '전체 내보내기',
+    reportLang: '보고서 언어',
   };
 
   const enLabels = {
@@ -258,6 +282,10 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
     printDev: 'Print Developer Docs',
     zip: 'Download Full ZIP',
     json: 'Raw JSON',
+    docDownload: 'Document Download',
+    print: 'Print',
+    fullExport: 'Full Export',
+    reportLang: 'Report Language',
   };
 
   const labels = lang === Language.KO ? koLabels : enLabels;
@@ -297,8 +325,33 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
 
       {isOpen && (
         <div className="absolute bottom-full right-0 mb-2 w-72 bg-white border border-slate-100 rounded-2xl shadow-2xl p-3 space-y-1 z-50">
+          {/* Report language selector */}
+          <div className="flex items-center justify-between px-2 pt-1 pb-2">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{labels.reportLang}</p>
+            <div className="flex bg-slate-100 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setReportLang(Language.KO)}
+                className={`px-3 py-1 text-[10px] font-bold transition-all ${
+                  reportLang === Language.KO ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                한국어
+              </button>
+              <button
+                onClick={() => setReportLang(Language.EN)}
+                className={`px-3 py-1 text-[10px] font-bold transition-all ${
+                  reportLang === Language.EN ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                English
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 my-1" />
+
           {/* Document downloads */}
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 pt-1">문서 다운로드</p>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 pt-1">{labels.docDownload}</p>
           <ExportButton
             format="json"
             target="download"
@@ -321,7 +374,7 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
           <div className="border-t border-slate-100 my-2" />
 
           {/* Print */}
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2">인쇄</p>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2">{labels.print}</p>
           <ExportButton
             format="json"
             target="download"
@@ -344,7 +397,7 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
           <div className="border-t border-slate-100 my-2" />
 
           {/* Full export */}
-          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2">전체 내보내기</p>
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2">{labels.fullExport}</p>
           <ExportButton
             format="zip"
             target="download"

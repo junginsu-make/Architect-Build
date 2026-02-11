@@ -1,4 +1,84 @@
 import type { SolutionBlueprint } from './geminiService';
+import { Language } from '../types/common';
+
+type Lang = Language;
+
+const reportLabels = {
+  [Language.KO]: {
+    clientTitle: '솔루션 제안서',
+    clientSubtitle: 'AI 기반 맞춤 설계',
+    problem: '현재 겪고 계신 문제',
+    solution: '우리의 해결 방안',
+    keyFeatures: '제공되는 핵심 기능',
+    schedule: '추진 일정',
+    expectedOutcomes: '도입 후 기대 효과',
+    investment: '투자 대비 효과',
+    dataProtection: '데이터 보호 및 보안',
+    references: '참고 자료',
+    devTitle: '개발 설계 문서',
+    devSubtitle: 'Architecture & Implementation Plan',
+    devNotReady: '구현 계획이 아직 생성되지 않았습니다.',
+    sprintPlan: '스프린트 계획',
+    duration: '기간',
+    goals: '목표',
+    deliverables: '산출물',
+    dependencies: '의존성',
+    projectStructure: '프로젝트 구조',
+    techStack: '기술 스택',
+    thCategory: '분류', thName: '이름', thVersion: '버전', thPurpose: '목적',
+    apiEndpoints: 'API 엔드포인트',
+    thMethod: '메서드', thPath: '경로', thDesc: '설명', thAuth: '인증',
+    authRequired: '필요', authPublic: '공개',
+    dbSchema: '데이터베이스 스키마',
+    thColumn: '컬럼', thType: '타입', thConstraint: '제약',
+    keyModules: '핵심 모듈',
+    deployPlan: '배포 계획',
+    testStrategy: '테스트 전략',
+    roadmap: '실행 로드맵',
+    analysisSummary: '분석 요약',
+    estimatedROI: '예상 ROI',
+    securityStrategy: '보안 전략',
+    reportTitle: '아키텍트 설계 보고서',
+    noDeps: '없음',
+  },
+  [Language.EN]: {
+    clientTitle: 'Solution Proposal',
+    clientSubtitle: 'AI-Powered Custom Design',
+    problem: 'Current Challenges',
+    solution: 'Our Solution',
+    keyFeatures: 'Key Features',
+    schedule: 'Project Timeline',
+    expectedOutcomes: 'Expected Outcomes',
+    investment: 'Return on Investment',
+    dataProtection: 'Data Protection & Security',
+    references: 'References',
+    devTitle: 'Developer Design Document',
+    devSubtitle: 'Architecture & Implementation Plan',
+    devNotReady: 'Implementation plan has not been generated yet.',
+    sprintPlan: 'Sprint Plan',
+    duration: 'Duration',
+    goals: 'Goals',
+    deliverables: 'Deliverables',
+    dependencies: 'Dependencies',
+    projectStructure: 'Project Structure',
+    techStack: 'Tech Stack',
+    thCategory: 'Category', thName: 'Name', thVersion: 'Version', thPurpose: 'Purpose',
+    apiEndpoints: 'API Endpoints',
+    thMethod: 'Method', thPath: 'Path', thDesc: 'Description', thAuth: 'Auth',
+    authRequired: 'Required', authPublic: 'Public',
+    dbSchema: 'Database Schema',
+    thColumn: 'Column', thType: 'Type', thConstraint: 'Constraint',
+    keyModules: 'Key Modules',
+    deployPlan: 'Deployment Plan',
+    testStrategy: 'Testing Strategy',
+    roadmap: 'Execution Roadmap',
+    analysisSummary: 'Analysis Summary',
+    estimatedROI: 'Estimated ROI',
+    securityStrategy: 'Security Strategy',
+    reportTitle: 'Architect Design Report',
+    noDeps: 'None',
+  },
+};
 
 const baseStyle = `
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -37,53 +117,103 @@ function escapeHtml(str: string): string {
 }
 
 function markdownToHtml(md: string): string {
-  return md
-    .split('\n')
-    .map(line => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('#### ')) return `<h4>${escapeHtml(trimmed.slice(5))}</h4>`;
-      if (trimmed.startsWith('### ')) return `<h3>${escapeHtml(trimmed.slice(4))}</h3>`;
-      if (trimmed.startsWith('## ')) return `<h2>${escapeHtml(trimmed.slice(3))}</h2>`;
-      if (trimmed.startsWith('# ')) return `<h1>${escapeHtml(trimmed.slice(2))}</h1>`;
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) return `<li>${escapeHtml(trimmed.slice(2))}</li>`;
-      if (/^\d+\.\s/.test(trimmed)) return `<li>${escapeHtml(trimmed.replace(/^\d+\.\s/, ''))}</li>`;
-      if (trimmed === '---') return '<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">';
-      if (trimmed === '') return '';
-      return `<p>${escapeHtml(trimmed).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>')}</p>`;
-    })
-    .join('\n');
+  const lines = md.split('\n');
+  const result: string[] = [];
+  let inList: 'ul' | 'ol' | null = null;
+  let inCodeBlock = false;
+
+  const flushList = () => {
+    if (inList) {
+      result.push(`</${inList}>`);
+      inList = null;
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Code block toggle
+    if (trimmed.startsWith('```')) {
+      flushList();
+      if (inCodeBlock) {
+        result.push('</code></pre>');
+        inCodeBlock = false;
+      } else {
+        inCodeBlock = true;
+        result.push('<pre><code>');
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      result.push(escapeHtml(line));
+      continue;
+    }
+
+    // Headings
+    if (trimmed.startsWith('#### ')) { flushList(); result.push(`<h4>${escapeHtml(trimmed.slice(5))}</h4>`); continue; }
+    if (trimmed.startsWith('### ')) { flushList(); result.push(`<h3>${escapeHtml(trimmed.slice(4))}</h3>`); continue; }
+    if (trimmed.startsWith('## ')) { flushList(); result.push(`<h2>${escapeHtml(trimmed.slice(3))}</h2>`); continue; }
+    if (trimmed.startsWith('# ')) { flushList(); result.push(`<h1>${escapeHtml(trimmed.slice(2))}</h1>`); continue; }
+
+    // Unordered list
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      if (inList !== 'ul') { flushList(); result.push('<ul>'); inList = 'ul'; }
+      result.push(`<li>${escapeHtml(trimmed.slice(2)).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>')}</li>`);
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\.\s/.test(trimmed)) {
+      if (inList !== 'ol') { flushList(); result.push('<ol>'); inList = 'ol'; }
+      result.push(`<li>${escapeHtml(trimmed.replace(/^\d+\.\s/, '')).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>')}</li>`);
+      continue;
+    }
+
+    // HR
+    if (trimmed === '---') { flushList(); result.push('<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">'); continue; }
+
+    // Empty line
+    if (trimmed === '') { flushList(); continue; }
+
+    // Normal paragraph
+    flushList();
+    result.push(`<p>${escapeHtml(trimmed).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>')}</p>`);
+  }
+
+  flushList();
+  if (inCodeBlock) result.push('</code></pre>');
+  return result.join('\n');
 }
 
-export function generateClientReportHtml(blueprint: SolutionBlueprint): string {
+export function generateClientReportHtml(blueprint: SolutionBlueprint, lang: Lang = Language.KO): string {
   const cp = blueprint.clientProposal;
-  const logo = blueprint.projectLogoBase64
-    ? `<img src="data:image/png;base64,${blueprint.projectLogoBase64}" style="width:56px;height:56px;border-radius:12px;border:1px solid #e2e8f0;margin-bottom:16px;" />`
-    : '';
+  const L = reportLabels[lang];
+  const htmlLang = lang === Language.KO ? 'ko' : 'en';
 
   let body = '';
 
   if (cp) {
     body = `
       <div style="text-align:center;margin-bottom:40px;">
-        ${logo}
-        <h1>솔루션 제안서</h1>
-        <p class="subtitle">AI 기반 맞춤 설계</p>
+        <h1>${L.clientTitle}</h1>
+        <p class="subtitle">${L.clientSubtitle}</p>
       </div>
 
-      <h2>현재 겪고 계신 문제</h2>
+      <h2>${L.problem}</h2>
       <div class="section-card">
         <p>${escapeHtml(cp.problemStatement)}</p>
       </div>
 
-      <h2>우리의 해결 방안</h2>
+      <h2>${L.solution}</h2>
       <div class="section-card" style="background:#eff6ff;border-color:#bfdbfe;">
         <p>${escapeHtml(cp.solutionOverview)}</p>
       </div>
 
-      <h2>제공되는 핵심 기능</h2>
+      <h2>${L.keyFeatures}</h2>
       ${cp.keyFeatures.map(f => `<div class="feature-item"><span class="feature-check">&#10003;</span><span>${escapeHtml(f)}</span></div>`).join('\n')}
 
-      <h2>추진 일정</h2>
+      <h2>${L.schedule}</h2>
       ${cp.milestones.map((m, i) => `
         <div class="milestone">
           <div class="milestone-num">${i + 1}</div>
@@ -94,35 +224,34 @@ export function generateClientReportHtml(blueprint: SolutionBlueprint): string {
         </div>
       `).join('\n')}
 
-      <h2>도입 후 기대 효과</h2>
+      <h2>${L.expectedOutcomes}</h2>
       <div class="section-card" style="background:#f0fdf4;border-color:#bbf7d0;">
         <p>${escapeHtml(cp.expectedOutcomes)}</p>
       </div>
 
-      <h2>투자 대비 효과</h2>
+      <h2>${L.investment}</h2>
       <p>${escapeHtml(cp.investmentSummary)}</p>
 
-      <h2>데이터 보호 및 보안</h2>
+      <h2>${L.dataProtection}</h2>
       <p>${escapeHtml(cp.dataProtection)}</p>
     `;
   } else {
     body = `
       <div style="text-align:center;margin-bottom:40px;">
-        ${logo}
-        <h1>아키텍트 설계 보고서</h1>
-        <p class="subtitle">AI 기반 맞춤 설계</p>
+        <h1>${L.reportTitle}</h1>
+        <p class="subtitle">${L.clientSubtitle}</p>
       </div>
 
-      <h2>분석 요약</h2>
+      <h2>${L.analysisSummary}</h2>
       ${markdownToHtml(blueprint.analysisSummary)}
 
-      <h2>실행 로드맵</h2>
+      <h2>${L.roadmap}</h2>
       <ol>${blueprint.roadmap.map(step => `<li>${escapeHtml(step)}</li>`).join('\n')}</ol>
 
-      <h2>예상 ROI</h2>
+      <h2>${L.estimatedROI}</h2>
       ${markdownToHtml(blueprint.estimatedROI)}
 
-      <h2>보안 전략</h2>
+      <h2>${L.securityStrategy}</h2>
       ${markdownToHtml(blueprint.securityStrategy)}
     `;
   }
@@ -132,81 +261,91 @@ export function generateClientReportHtml(blueprint: SolutionBlueprint): string {
       try { const u = new URL(s.uri); return u.protocol === 'https:' || u.protocol === 'http:'; } catch { return false; }
     });
     if (validSources.length > 0) {
-      body += `<h2>참고 자료</h2><ul>${validSources.map(s => `<li><a href="${escapeHtml(s.uri)}" target="_blank">${escapeHtml(s.title)}</a></li>`).join('\n')}</ul>`;
+      body += `<h2>${L.references}</h2><ul>${validSources.map(s => `<li><a href="${escapeHtml(s.uri)}" target="_blank">${escapeHtml(s.title)}</a></li>`).join('\n')}</ul>`;
     }
   }
 
   body += `<div class="footer">Architect Enterprise Builder</div>`;
 
-  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>솔루션 제안서</title><style>${baseStyle}</style></head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="${htmlLang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${L.clientTitle}</title><style>${baseStyle}</style></head><body>${body}</body></html>`;
 }
 
-export function generateDeveloperReportHtml(blueprint: SolutionBlueprint): string {
+export function generateDeveloperReportHtml(blueprint: SolutionBlueprint, lang: Lang = Language.KO): string {
   const impl = blueprint.implementationPlan;
+  const L = reportLabels[lang];
+  const htmlLang = lang === Language.KO ? 'ko' : 'en';
+
   if (!impl) {
-    return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>개발 문서</title><style>${baseStyle}</style></head><body><h1>개발 문서</h1><p>구현 계획이 아직 생성되지 않았습니다.</p></body></html>`;
+    return `<!DOCTYPE html><html lang="${htmlLang}"><head><meta charset="UTF-8"><title>${L.devTitle}</title><style>${baseStyle}</style></head><body><h1>${L.devTitle}</h1><p>${L.devNotReady}</p></body></html>`;
   }
 
   let body = `
     <div style="text-align:center;margin-bottom:40px;">
-      <h1>개발 설계 문서</h1>
-      <p class="subtitle">Architecture &amp; Implementation Plan</p>
+      <h1>${L.devTitle}</h1>
+      <p class="subtitle">${L.devSubtitle}</p>
     </div>
   `;
 
-  // PRD
   if (impl.prd) {
     body += `<h2>PRD (Product Requirements Document)</h2>${markdownToHtml(impl.prd)}`;
   }
 
-  // LLD
   if (impl.lld) {
     body += `<h2>LLD (Low-Level Design)</h2>${markdownToHtml(impl.lld)}`;
   }
 
-  // Sprint Plan
   if (impl.sprintPlan?.length) {
-    body += `<h2>스프린트 계획</h2>`;
+    body += `<h2>${L.sprintPlan}</h2>`;
     for (const sp of impl.sprintPlan) {
       body += `
         <h3>Sprint ${sp.sprint}: ${escapeHtml(sp.title)}</h3>
-        <p><strong>기간:</strong> ${escapeHtml(sp.duration)}</p>
-        <h4>목표</h4><ul>${sp.goals.map(g => `<li>${escapeHtml(g)}</li>`).join('')}</ul>
-        <h4>산출물</h4><ul>${sp.deliverables.map(d => `<li>${escapeHtml(d)}</li>`).join('')}</ul>
-        ${sp.dependencies.length > 0 ? `<h4>의존성</h4><ul>${sp.dependencies.map(d => `<li>${escapeHtml(d)}</li>`).join('')}</ul>` : ''}
+        <p><strong>${L.duration}:</strong> ${escapeHtml(sp.duration)}</p>
+        <h4>${L.goals}</h4><ul>${sp.goals.map(g => `<li>${escapeHtml(g)}</li>`).join('')}</ul>
+        <h4>${L.deliverables}</h4><ul>${sp.deliverables.map(d => `<li>${escapeHtml(d)}</li>`).join('')}</ul>
+        ${sp.dependencies.length > 0 ? `<h4>${L.dependencies}</h4><ul>${sp.dependencies.map(d => `<li>${escapeHtml(d)}</li>`).join('')}</ul>` : ''}
       `;
     }
   }
 
-  // Project Structure
   if (impl.projectStructure) {
-    body += `<h2>프로젝트 구조</h2><pre>${escapeHtml(impl.projectStructure)}</pre>`;
+    body += `<h2>${L.projectStructure}</h2><pre>${escapeHtml(impl.projectStructure)}</pre>`;
   }
 
-  // Tech Stack
   if (impl.techStack?.length) {
-    body += `<h2>기술 스택</h2><table><thead><tr><th>분류</th><th>이름</th><th>버전</th><th>목적</th></tr></thead><tbody>`;
+    body += `<h2>${L.techStack}</h2><table><thead><tr><th>${L.thCategory}</th><th>${L.thName}</th><th>${L.thVersion}</th><th>${L.thPurpose}</th></tr></thead><tbody>`;
     for (const t of impl.techStack) {
       body += `<tr><td>${escapeHtml(t.category)}</td><td><strong>${escapeHtml(t.name)}</strong></td><td>${escapeHtml(t.version)}</td><td>${escapeHtml(t.purpose)}</td></tr>`;
     }
     body += `</tbody></table>`;
   }
 
-  // API Design
   if (impl.apiDesign?.length) {
-    body += `<h2>API 엔드포인트</h2><table><thead><tr><th>메서드</th><th>경로</th><th>설명</th><th>인증</th></tr></thead><tbody>`;
+    body += `<h2>${L.apiEndpoints}</h2><table><thead><tr><th>${L.thMethod}</th><th>${L.thPath}</th><th>${L.thDesc}</th><th>${L.thAuth}</th></tr></thead><tbody>`;
     for (const a of impl.apiDesign) {
-      body += `<tr><td><span class="badge badge-method">${escapeHtml(a.method)}</span></td><td><code>${escapeHtml(a.path)}</code></td><td>${escapeHtml(a.description)}</td><td>${a.auth ? '<span class="badge badge-auth">필요</span>' : '공개'}</td></tr>`;
+      body += `<tr><td><span class="badge badge-method">${escapeHtml(a.method)}</span></td><td><code>${escapeHtml(a.path)}</code></td><td>${escapeHtml(a.description)}</td><td>${a.auth ? `<span class="badge badge-auth">${L.authRequired}</span>` : L.authPublic}</td></tr>`;
     }
     body += `</tbody></table>`;
+    // Expanded API endpoint details
+    for (const a of impl.apiDesign) {
+      body += `<h3><span class="badge badge-method">${escapeHtml(a.method)}</span> <code>${escapeHtml(a.path)}</code></h3>`;
+      body += `<p>${escapeHtml(a.description)}</p>`;
+      if (a.requestBody) {
+        body += `<h4>${lang === Language.KO ? '요청 본문' : 'Request Body'}</h4><pre>${escapeHtml(a.requestBody)}</pre>`;
+      }
+      if (a.responseBody) {
+        body += `<h4>${lang === Language.KO ? '응답' : 'Response'}</h4><pre>${escapeHtml(a.responseBody)}</pre>`;
+      }
+      if (a.errorCodes && a.errorCodes.length > 0) {
+        body += `<h4>${lang === Language.KO ? '에러 코드' : 'Error Codes'}</h4><ul>${a.errorCodes.map(c => `<li><code>${escapeHtml(c)}</code></li>`).join('')}</ul>`;
+      }
+    }
   }
 
-  // DB Schema
   if (impl.databaseDesign?.length) {
-    body += `<h2>데이터베이스 스키마</h2>`;
+    body += `<h2>${L.dbSchema}</h2>`;
     for (const table of impl.databaseDesign) {
       body += `<h3>${escapeHtml(table.name)}</h3><p>${escapeHtml(table.description)}</p>`;
-      body += `<table><thead><tr><th>컬럼</th><th>타입</th><th>제약</th></tr></thead><tbody>`;
+      body += `<table><thead><tr><th>${L.thColumn}</th><th>${L.thType}</th><th>${L.thConstraint}</th></tr></thead><tbody>`;
       for (const c of table.columns) {
         body += `<tr><td><code>${escapeHtml(c.name)}</code></td><td>${escapeHtml(c.type)}</td><td>${escapeHtml(c.constraint)}</td></tr>`;
       }
@@ -214,9 +353,8 @@ export function generateDeveloperReportHtml(blueprint: SolutionBlueprint): strin
     }
   }
 
-  // Key Modules
   if (impl.keyModules?.length) {
-    body += `<h2>핵심 모듈</h2>`;
+    body += `<h2>${L.keyModules}</h2>`;
     for (const mod of impl.keyModules) {
       body += `<h3>${escapeHtml(mod.name)} <span style="font-size:12px;color:#94a3b8;font-weight:400;">${escapeHtml(mod.file)}</span></h3>`;
       body += `<p>${escapeHtml(mod.description)}</p>`;
@@ -224,22 +362,19 @@ export function generateDeveloperReportHtml(blueprint: SolutionBlueprint): strin
     }
   }
 
-  // Deploy
   if (impl.deploymentPlan) {
-    body += `<h2>배포 계획</h2>${markdownToHtml(impl.deploymentPlan)}`;
+    body += `<h2>${L.deployPlan}</h2>${markdownToHtml(impl.deploymentPlan)}`;
   }
 
-  // Testing
   if (impl.testingStrategy) {
-    body += `<h2>테스트 전략</h2>${markdownToHtml(impl.testingStrategy)}`;
+    body += `<h2>${L.testStrategy}</h2>${markdownToHtml(impl.testingStrategy)}`;
   }
 
-  // Roadmap
-  body += `<h2>실행 로드맵</h2><ol>${blueprint.roadmap.map(step => `<li>${escapeHtml(step)}</li>`).join('\n')}</ol>`;
+  body += `<h2>${L.roadmap}</h2><ol>${blueprint.roadmap.map(step => `<li>${escapeHtml(step)}</li>`).join('\n')}</ol>`;
 
   body += `<div class="footer">Architect Enterprise Builder</div>`;
 
-  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>개발 설계 문서</title><style>${baseStyle}</style></head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="${htmlLang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${L.devTitle}</title><style>${baseStyle}</style></head><body>${body}</body></html>`;
 }
 
 export function downloadHtml(html: string, filename: string) {

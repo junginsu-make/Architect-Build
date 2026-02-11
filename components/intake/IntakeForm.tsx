@@ -2,6 +2,9 @@ import React, { useState, useMemo } from 'react';
 import type { IntakeFormSchema, IntakeFormData } from '../../types/intake';
 import IntakeFieldRenderer from './IntakeFieldRenderer';
 import IntakeFormPreview from './IntakeFormPreview';
+import { useUIStore } from '../../store/uiStore';
+import { translations } from '../../translations';
+import { Language } from '../../types';
 
 // Intake Form Schema: 5 sections mapped to the 5 diagnostic questions
 const intakeSchema: IntakeFormSchema = {
@@ -140,14 +143,29 @@ const intakeSchema: IntakeFormSchema = {
 };
 
 // Bridge function: convert form data to userResponses array compatible with existing services
-export function intakeFormToUserResponses(formData: IntakeFormData, schema: IntakeFormSchema): string[] {
+export function intakeFormToUserResponses(formData: IntakeFormData, schema: IntakeFormSchema, lang: Language = Language.KO): string[] {
+  const isEn = lang === Language.EN;
   return schema.sections.map((section) => {
     const parts = section.fields
       .map((field) => {
         const val = formData[field.id];
         if (!val || (Array.isArray(val) && val.length === 0)) return null;
-        const displayVal = Array.isArray(val) ? val.join(', ') : val;
-        return `${field.label}: ${displayVal}`;
+        const fieldLabel = isEn ? field.labelEn : field.label;
+
+        let displayVal: string;
+        if (Array.isArray(val)) {
+          displayVal = val.map(v => {
+            const opt = field.options?.find(o => o.value === v);
+            return opt ? (isEn ? opt.labelEn : opt.label) : v;
+          }).join(', ');
+        } else if (field.options) {
+          const opt = field.options.find(o => o.value === val);
+          displayVal = opt ? (isEn ? opt.labelEn : opt.label) : val;
+        } else {
+          displayVal = val;
+        }
+
+        return `${fieldLabel}: ${displayVal}`;
       })
       .filter(Boolean);
     return parts.join('. ');
@@ -162,6 +180,9 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
   const [formData, setFormData] = useState<IntakeFormData>({});
   const [activeSection, setActiveSection] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
+  const lang = useUIStore((s) => s.lang);
+  const t = translations[lang];
+  const isEn = lang === Language.EN;
 
   const handleFieldChange = (fieldId: string, value: string | string[]) => {
     setFormData((prev) => ({ ...prev, [fieldId]: value }));
@@ -200,7 +221,7 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
   const currentSection = intakeSchema.sections[activeSection];
 
   const handleSubmit = () => {
-    const responses = intakeFormToUserResponses(formData, intakeSchema);
+    const responses = intakeFormToUserResponses(formData, intakeSchema, lang);
     onSubmit(responses);
   };
 
@@ -209,6 +230,7 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
       <IntakeFormPreview
         formData={formData}
         schema={intakeSchema}
+        lang={lang}
         onBack={() => setShowPreview(false)}
         onSubmit={handleSubmit}
       />
@@ -216,20 +238,20 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col flex-1 min-h-0 bg-white">
       {/* Header with progress */}
-      <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+      <div className="flex-shrink-0 px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 bg-slate-50/50">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-black text-slate-900 text-sm">
-            요구사항 정의서
+            {t.intakeFormTitle}
           </h3>
           <div className="flex items-center gap-3">
             <span className="text-xs font-bold text-slate-500">
-              {completionStats.percentAll}% 완료
+              {completionStats.percentAll}% {t.intakeFormComplete}
             </span>
             {!completionStats.isP1Complete && (
               <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                필수: {completionStats.filledP1}/{completionStats.totalP1}
+                {t.intakeFormRequired}: {completionStats.filledP1}/{completionStats.totalP1}
               </span>
             )}
           </div>
@@ -243,7 +265,7 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
       </div>
 
       {/* Section navigation */}
-      <div className="flex gap-1 px-4 py-3 overflow-x-auto border-b border-slate-100">
+      <div className="flex-shrink-0 flex gap-1 px-4 py-3 overflow-x-auto border-b border-slate-100">
         {intakeSchema.sections.map((section, i) => (
           <button
             key={section.id}
@@ -254,19 +276,19 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
                 : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
             }`}
           >
-            {section.title}
+            {isEn ? section.titleEn : section.title}
           </button>
         ))}
       </div>
 
       {/* Section content */}
-      <div className="flex-grow overflow-y-auto p-6 space-y-6">
+      <div className="flex-grow overflow-y-auto p-4 md:p-6 space-y-6">
         <div className="mb-4">
           <h4 className="font-bold text-lg text-slate-900 mb-1">
-            {currentSection.title}
+            {isEn ? currentSection.titleEn : currentSection.title}
           </h4>
           <p className="text-sm text-slate-400">
-            {currentSection.description}
+            {isEn ? currentSection.descriptionEn : currentSection.description}
           </p>
         </div>
 
@@ -276,19 +298,20 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
             field={field}
             value={formData[field.id] || ''}
             onChange={handleFieldChange}
+            lang={lang}
           />
         ))}
       </div>
 
       {/* Footer actions */}
-      <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
+      <div className="flex-shrink-0 px-4 md:px-6 py-3 md:py-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
           {activeSection > 0 && (
             <button
               onClick={() => setActiveSection((s) => s - 1)}
               className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all"
             >
-              이전
+              {t.intakeFormPrev}
             </button>
           )}
           {activeSection < intakeSchema.sections.length - 1 && (
@@ -296,7 +319,7 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
               onClick={() => setActiveSection((s) => s + 1)}
               className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-all"
             >
-              다음
+              {t.intakeFormNext}
             </button>
           )}
         </div>
@@ -305,14 +328,14 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
             onClick={() => setShowPreview(true)}
             className="px-4 py-2.5 rounded-xl border border-blue-200 text-blue-600 text-xs font-bold hover:bg-blue-50 transition-all"
           >
-            프리뷰
+            {t.intakeFormPreview}
           </button>
           <button
             onClick={handleSubmit}
             disabled={!completionStats.isP1Complete}
             className="px-6 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all shadow-sm"
           >
-            설계 시작
+            {t.intakeFormStart}
           </button>
         </div>
       </div>

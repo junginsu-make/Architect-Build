@@ -1,53 +1,207 @@
 # Build Agent 시스템 - 종합 설계 보고서
 
-> 4개 전문 에이전트(아키텍처, UX/워크플로우, 기술스택, 산출물)의 분석을 종합한 결과입니다.
-> 작성일: 2026-02-10
+> Architect Enterprise Builder의 멀티모델 AI 에이전트 시스템 현황 및 설계 방향
+> 최종 업데이트: 2026-02-11
 
 ---
 
-## 1. 시스템 비전 요약
+## 1. 시스템 비전
 
 ```
-클라이언트 <-- 제안서/ROI --- 담당자(사용자) --- 기술명세/코드 --> 개발자
-                                    |
-                            Build Agent System
-                          (SuperAIAgent + Sub Agents)
+클라이언트 <── 제안서/기대효과 ── 담당자(사용자) ── 기술명세/코드 ──> 개발자
+                                       |
+                               Architect System
+                         (Gemini + Claude 멀티모델 병렬 생성)
 ```
 
 **핵심 가치**: 비기술자인 담당자가 음성/문서/텍스트를 입력하면, AI가 양쪽(클라이언트/개발자) 모두에게 전달할 수 있는 전문 산출물을 자동 생성합니다.
 
 ---
 
-## 2. 아키텍처
+## 2. 현재 아키텍처 (Phase A 완료)
 
 ### 2.1 3계층 구조
 
 ```
 +-- UI Layer ------------------------------------------------+
-|  ProjectDashboard -> WorkbenchView -> DeliverableViewer     |
+|  App.tsx → ChatPanel / IntakeForm → ResultPanel             |
+|  (클라이언트 뷰 + 개발자 4탭 뷰)                               |
 +--------------------------+---------------------------------+
                            |
-+-- Orchestration Layer ---v---------------------------------+
-|  SuperAIAgent                                              |
-|  +-- Intent Classifier (의도 분류)                          |
-|  +-- Pipeline Planner (실행 계획)                           |
-|  +-- Agent Scheduler (병렬 실행 - Promise.allSettled)       |
-|  +-- Result Aggregator (결과 병합)                          |
++-- Service Layer ---------v---------------------------------+
+|  useChat (오케스트레이터)                                     |
+|  ├── geminiService.ts (Gemini 비즈니스 분석)                  |
+|  ├── claudeService.ts (Claude 구현 설계)                     |
+|  ├── reportGenerator.ts (HTML 보고서 생성)                   |
+|  └── liveTranslationService.ts (실시간 통역)                 |
 |                                                            |
-|  Sub Agent Registry (플러그인 구조)                          |
-|  +-- meeting-minutes    +-- tech-spec                      |
-|  +-- document-analysis  +-- architecture-diagram           |
-|  +-- market-research    +-- client-brief                   |
-|  +-- code-scaffold      +-- cost-estimate                  |
-|  +-- (새 에이전트: 파일 1개 + 등록 1줄)                      |
+|  Agent Framework (스켈레톤)                                  |
+|  ├── BaseAgent / AgentRegistry / PipelineScheduler          |
+|  └── architectBlueprint.agent.ts                           |
 +--------------------------+---------------------------------+
                            |
 +-- Persistence Layer -----v---------------------------------+
-|  IndexedDB (Dexie.js) - 프로젝트 단위 영속 저장             |
+|  Zustand (메모리 상태) + Dexie.js (IndexedDB 영속 저장)       |
 +------------------------------------------------------------+
 ```
 
-### 2.2 에이전트 의존성 DAG (병렬 실행 순서)
+### 2.2 멀티모델 병렬 생성
+
+```
+Phase 7 Blueprint 생성:
+
+  ┌─────────────────────────────────────────┐
+  │           useChat (오케스트레이터)          │
+  │                                         │
+  │   Promise.allSettled([                   │
+  │     ┌─────────────────────┐             │
+  │     │ Gemini 3 Pro        │ → SolutionBlueprint      │
+  │     │ (비즈니스 분석)        │   + ClientProposal      │
+  │     └─────────────────────┘             │
+  │     ┌─────────────────────┐             │
+  │     │ Claude Sonnet 4.5   │ → ImplementationPlan     │
+  │     │ (구현 설계)           │   (PRD/LLD/Sprint/Code) │
+  │     └─────────────────────┘             │
+  │   ])                                    │
+  │                                         │
+  │   → deliverableStore.setBlueprint()     │
+  └─────────────────────────────────────────┘
+```
+
+---
+
+## 3. 입력 시스템
+
+### 3.1 다중 입력 방식
+
+| 입력 방식 | 분석 모델 | 결과 형식 |
+|:---|:---|:---|
+| **채팅 (5단계 진단)** | Gemini Flash (후속 질문) | userResponses[] |
+| **구조화 양식 (IntakeForm)** | — | userResponses[] 직접 매핑 |
+| **PDF 업로드** (최대 20MB) | Gemini Flash | `DocumentAnalysis` JSON |
+| **장문 텍스트 붙여넣기** | Gemini Flash | `DocumentAnalysis` JSON |
+| **음성 녹음** (5초~30분) | Gemini 2.0 Flash | `MeetingMinutes` JSON |
+
+### 3.2 문서/회의록 → 블루프린트 자동 변환
+
+분석된 `designKeywords`(background, model, process, tech, goal)가 userResponses에 자동 매핑되어 즉시 블루프린트 생성 가능:
+- "문서 기반으로 설계 시작" → DocumentAnalysis의 designKeywords 매핑
+- "회의록 기반으로 설계 시작" → MeetingMinutes의 designKeywords 매핑
+
+### 3.3 5대 설계 영역
+
+| 영역 | 설명 | Phase |
+|:---|:---|:---:|
+| COMPANY_CONTEXT | 비즈니스 배경/문제 | 1 |
+| SOLUTION_MODEL | 희망 시스템 모델 | 2 |
+| MODULE_LOGIC | 사용자 및 업무 흐름 | 3 |
+| TECH_INTEGRATION | 기술 환경/제약 | 4 |
+| BUSINESS_GOAL | 성공 지표/KPI | 5 |
+
+---
+
+## 4. 양방향 산출물
+
+### 4.1 클라이언트용 (ClientProposal)
+
+기술 용어 없이 비즈니스 가치 중심으로 작성. 검증되지 않은 가상 수치 금지.
+
+| 항목 | 설명 |
+|:---|:---|
+| 문제 정의 | 현재 겪는 비즈니스 문제 |
+| 해결 방안 | 쉬운 표현으로 작성된 솔루션 개요 |
+| 핵심 기능 체크리스트 | 주요 기능 목록 |
+| 추진 일정 | 마일스톤 타임라인 (phase/duration/outcome) |
+| 기대 효과 | 정성적 표현 (가상 수치 금지) |
+| 데이터 보호 방안 | 보안/프라이버시 전략 |
+| 투자 대비 효과 요약 | 정성적 ROI 설명 |
+
+### 4.2 개발자용 (ImplementationPlan + 다이어그램)
+
+20년+ 시니어 아키텍트 수준의 전문 문서. 4탭 구조:
+
+| 탭 | 내용 |
+|:---|:---|
+| **로드맵** | 스프린트 카드 (목표/산출물/의존성/기간) 또는 단계별 로드맵 |
+| **아키텍처** | Mermaid 다이어그램 (시스템/시퀀스/기술스택) |
+| **구현** | 프로젝트 구조, 기술 스택 테이블, API 명세, DB 스키마, 핵심 코드 모듈 |
+| **문서** | PRD (8개 섹션), LLD (8개 섹션) 마크다운 전문 |
+
+### 4.3 내보내기 시스템
+
+| 형식 | 설명 |
+|:---|:---|
+| **클라이언트 보고서 (HTML)** | 독립 HTML 파일 — 브라우저에서 열거나 PDF 저장 가능 |
+| **개발자 문서 (HTML)** | PRD/LLD/스프린트/API/DB 포함 독립 HTML |
+| **클라이언트용 인쇄** | 새 창에서 콘텐츠만 열어 인쇄 (브라우저 UI 미포함) |
+| **개발자용 인쇄** | 새 창에서 전문 문서만 열어 인쇄 |
+| **ZIP 전체 다운로드** | 구조화된 폴더 (client/, developer/, diagrams/) |
+| **JSON 원본** | blueprint 전체 데이터 |
+
+ZIP 구조:
+```
+architect-blueprint.zip
+├── blueprint.json
+├── client/
+│   ├── proposal.md
+│   └── proposal.html
+├── developer/
+│   ├── prd.md
+│   ├── lld.md
+│   ├── sprint-plan.md
+│   ├── api-spec.md
+│   ├── db-schema.md
+│   ├── implementation.json
+│   └── full-report.html
+├── diagrams/
+│   ├── architecture.mmd
+│   ├── sequence.mmd
+│   └── tech-stack.mmd
+└── report.md
+```
+
+---
+
+## 5. 기술 스택
+
+### 5.1 핵심 스택
+
+| 카테고리 | 선택 | 역할 |
+|:---|:---|:---|
+| 프레임워크 | React 19 + TypeScript 5.8 | UI 렌더링 |
+| 빌드 | Vite 6.2 | HMR + 빌드 |
+| AI (비즈니스) | @google/genai + Gemini | 분석/설계/채팅 |
+| AI (구현) | @anthropic-ai/sdk + Claude | PRD/LLD/코드 |
+| 상태 관리 | Zustand 5.x | 4개 독립 스토어 |
+| DB | Dexie.js 4.3 | IndexedDB 영속 저장 |
+| ZIP | JSZip 3.10 | 구조화된 내보내기 |
+| CSS | @tailwindcss/vite 4.x | 빌드타임 CSS |
+| 다이어그램 | Mermaid.js CDN | 아키텍처/시퀀스/ERD |
+
+### 5.2 프론트엔드 전용 아키텍처
+
+현재 백엔드 없이 프론트엔드만으로 핵심 기능의 100% 구현:
+- AI API 직접 호출 (클라이언트 사이드)
+- IndexedDB로 프로젝트 영속 저장
+- HTML 보고서 클라이언트 사이드 생성
+- ZIP 파일 클라이언트 사이드 생성
+
+---
+
+## 6. 에이전트 프레임워크 (스켈레톤 구축 완료)
+
+### 6.1 현재 구현 상태
+
+Phase A에서 에이전트 프레임워크의 기반 구조가 구축되었습니다:
+
+| 파일 | 역할 | 상태 |
+|:---|:---|:---|
+| `agents/base.ts` | BaseAgent 추상 클래스 (execute → run 패턴) | 구현 완료 |
+| `agents/registry.ts` | AgentRegistry 싱글톤 (register/get/getDependencyOrder) | 구현 완료 |
+| `agents/scheduler.ts` | PipelineScheduler (DAG 기반 Promise.allSettled) | 구현 완료 |
+| `agents/definitions/architectBlueprint.agent.ts` | 기존 generateSolutionBlueprint 래핑 | 구현 완료 |
+
+### 6.2 향후 에이전트 확장 계획 (Phase B)
 
 ```
 Layer 1 (병렬): meeting-minutes | document-analysis | market-research
@@ -59,173 +213,67 @@ Layer 3 (병렬): architecture-diagram | sequence-diagram | erd-generator
 Layer 4 (병렬): client-brief | code-scaffold | executive-summary
 ```
 
----
-
-## 3. 입력 우선순위 시스템
-
-### 3.1 P1/P2/P3 자동 분류
-
-| 등급 | 이름 | 설계 반영도 | 예시 |
-|:---|:---|:---|:---|
-| **P1** | 필수 반영 (Must) | 100% 직접 반영 | "물류회사, 실시간 배차 시스템 필요" |
-| **P2** | 참조 (Reference) | 조건부 반영 | "현재 엑셀로 관리, 드라이버 30명" |
-| **P3** | 배경 (Context) | 맥락 참고만 | "설립 15년, 연 매출 30억" |
-
-### 3.2 적응형 진단 흐름
-
-```
-INTAKE (자유 입력) -> TRIAGE (자동 분류+갭 분석) -> DEEP_DIVE (부족한 영역만 질문) -> CONFIRMATION -> GENERATION
-```
-
-### 3.3 5대 설계 영역
-
-- BUSINESS_PROBLEM: 비즈니스 배경/문제
-- SYSTEM_MODEL: 희망 시스템 모델
-- USER_WORKFLOW: 사용자 및 업무 흐름
-- TECH_ENVIRONMENT: 기술 환경/제약
-- SUCCESS_CRITERIA: 성공 지표/KPI
-
-### 3.4 능동적 질문 우선순위
-
-- **BLOCKER**: 이것 없이는 설계 불가 -> 반드시 답변 필요
-- **IMPORTANT**: 없으면 퀄리티 저하 -> 답변 권장
-- **NICE_TO_HAVE**: 기본값으로 진행 가능 -> 스킵 가능
-
----
-
-## 4. 양방향 산출물
-
-### 4.1 3-Layer 산출물
-
-| 산출물 | 대상 | 형식 |
-|:---|:---|:---|
-| Executive Summary | 클라이언트 | PDF |
-| 비즈니스 제안서 (ROI/경쟁사 분석) | 클라이언트 | PDF |
-| 프로젝트 타임라인 | 클라이언트 | Mermaid Gantt |
-| 기술 명세서 (API/DB/인프라) | 개발자 | Markdown |
-| 아키텍처/시퀀스/ERD 다이어그램 | 개발자 | Mermaid |
-| 코드 스캐폴딩 | 개발자 | ZIP |
-| n8n 워크플로우 JSON | 개발자 | JSON |
-| SOP 운영 문서 | 개발자 | Markdown |
-| 회의록 | 내부 | Markdown |
-| 프로젝트 추적/피드백 이력 | 내부 | 대시보드 |
-
-### 4.2 ResultPanel 확장
-
-```
-[클라이언트용]  [개발자용]  [프로젝트 관리]
-    +- 요약       +- Tech Spec    +- 회의록
-    +- 제안서     +- 아키텍처     +- 진행현황
-    +- 타임라인   +- 코드베이스   +- 피드백
-    +- ROI        +- n8n 워크플로  +- 버전이력
-                  +- SOP
-```
-
----
-
-## 5. 기술 스택
-
-### 5.1 핵심 스택
-
-| 카테고리 | 선택 | 번들 크기 |
-|:---|:---|:---|
-| 프레임워크 | React 19 + TypeScript | 유지 |
-| 빌드 | Vite 6.2 | 유지 |
-| AI | @google/genai + Gemini | 유지 |
-| 상태 관리 | Zustand 5.x | ~2KB |
-| DB | Dexie.js 4.3 | ~29KB |
-| PDF | pdfmake | ~588KB (지연로딩) |
-| DOCX | docx | 중간 (지연로딩) |
-| ZIP | JSZip | ~12KB |
-| CSS | @tailwindcss/vite | 빌드타임 |
-
-### 5.2 프론트엔드 vs 백엔드
-
-- 프론트엔드만으로 핵심 기능의 90% 구현 가능
-- 백엔드 필요: API 키 보안, 멀티 디바이스 동기화, 팀 협업
-
----
-
-## 6. 파일 구조
-
-```
-Architect-Build/
-+-- types/
-|   +-- project.ts
-|   +-- agent.ts
-|   +-- deliverable.ts
-|   +-- ui.ts
-|   +-- index.ts
-+-- store/
-|   +-- projectStore.ts
-|   +-- agentStore.ts
-|   +-- deliverableStore.ts
-|   +-- uiStore.ts
-+-- db/
-|   +-- database.ts
-+-- agents/
-|   +-- superAgent.ts
-|   +-- scheduler.ts
-|   +-- registry.ts
-|   +-- base.ts
-|   +-- definitions/
-|       +-- meetingMinutes.agent.ts
-|       +-- techSpec.agent.ts
-|       +-- clientBrief.agent.ts
-|       +-- codeScaffold.agent.ts
-|       +-- ...
-+-- services/
-|   +-- geminiClient.ts
-|   +-- liveTranslationService.ts
-+-- hooks/
-|   +-- useProject.ts
-|   +-- useAgentPipeline.ts
-|   +-- useDeliverables.ts
-+-- components/
-|   +-- project/
-|   +-- workbench/
-|   +-- deliverables/
-|   +-- input/
-|   +-- translation/
-+-- docs/
-    +-- BUILD_AGENT_DESIGN_REPORT.md
-    +-- SYSTEM_SPECIFICATION.md
-    +-- TECHNICAL_SPEC.md
-```
+새 에이전트 추가: BaseAgent 상속 파일 1개 + registry 등록 1줄
 
 ---
 
 ## 7. 마이그레이션 로드맵
 
-### Phase A: 기반 구축
-- types/ 분리, Zustand 도입, Dexie.js 연동
-- Tailwind CDN -> 빌드 통합
-- agents/ 기반 구조 (registry, base, scheduler)
+### Phase A: 기반 구축 (완료)
+- [x] types/ 분리 (common, project, agent, deliverable, intake)
+- [x] Zustand 4개 스토어 도입 (chatStore, uiStore, deliverableStore, projectStore)
+- [x] Dexie.js IndexedDB 연동
+- [x] Tailwind CDN → @tailwindcss/vite 빌드 통합
+- [x] agents/ 기반 구조 (base, registry, scheduler)
+- [x] useChat 훅 추출 (App.tsx 344줄 → ~125줄)
+- [x] Claude Sonnet 4.5 구현 설계 엔진 연동
+- [x] 클라이언트/개발자 이중 뷰 ResultPanel
+- [x] 독립 HTML 보고서 생성 (reportGenerator)
+- [x] 구조화된 ZIP 내보내기 (JSZip)
+- [x] 구조화된 문서 분석 (DocumentAnalysis JSON)
+- [x] 구조화된 회의록 시스템 (MeetingMinutes JSON)
+- [x] 문서/회의록 → 블루프린트 자동 변환
+- [x] IntakeForm 구조화 양식 시스템
+- [x] 음성 녹음 안정성 개선 (5초~30분, 자동 정지)
+- [x] 보안 강화: Mermaid `securityLevel: 'strict'` 적용
+- [x] 보안 강화: CSP `connect-src`에 `api.anthropic.com` 추가
+- [x] 보안 강화: Gemini `systemInstruction` 분리 (프롬프트 인젝션 방어)
+- [x] 보안 강화: Phase 6 승인 정확 매칭 (`^...$` 앵커)
+- [x] 로고 생성 기능 제거 (Gemini Flash Image 호출 삭제, 전 소스/문서 정리)
 
-### Phase B: 에이전트 마이그레이션
-- geminiService.ts -> Sub Agent 분리
-- SuperAIAgent 구현
-- P1/P2/P3 우선순위 시스템
-- 적응형 진단 흐름
+### Phase B: 에이전트 마이그레이션 (예정)
+- [ ] geminiService.ts → Sub Agent 분리
+- [ ] SuperAIAgent 구현 (의도 분류 + 파이프라인 계획)
+- [ ] P1/P2/P3 우선순위 자동 분류
+- [ ] 적응형 진단 흐름 (INTAKE → TRIAGE → DEEP_DIVE → CONFIRMATION → GENERATION)
 
-### Phase C: UI 전환
-- ProjectDashboard, WorkbenchView
-- DeliverableViewer (3-뷰)
-- 내보내기 (PDF/DOCX/ZIP)
+### Phase C: 확장 기능 (예정)
+- [ ] PDF 다운로드 (html2pdf 또는 서버사이드)
+- [ ] 이메일 발송 (emailService 구현)
+- [ ] Google Drive 저장 (gdriveService 구현)
+- [ ] Mermaid CDN → 빌드 통합
+- [ ] 프록시 서버 도입 (API 키 보안)
 
-### Phase D: 신규 에이전트 + 고급 기능
-- CodeScaffold, ERD, n8n 워크플로우 생성
-- 기업 분석 + 웹 서치 강화
-- 버전 관리 + 피드백 루프
+### Phase D: 신규 에이전트 + 고급 기능 (예정)
+- [ ] CodeScaffold, ERD, n8n 워크플로우 생성
+- [ ] 기업 분석 + 웹 서치 강화
+- [ ] 프로젝트 버전 관리 + 피드백 루프
+- [ ] 멀티 디바이스 동기화 (클라우드 DB)
+- [ ] OAuth/SSO 인증
 
 ---
 
 ## 8. 리스크 및 대응
 
-| 리스크 | 대응 |
+| 리스크 | 현재 대응 |
 |:---|:---|
-| Gemini API 비용 초과 | 에이전트별 토큰 한도, Flash 우선 |
-| n8n JSON 생성 품질 | 템플릿 기반 + 핵심 노드 15개 제한 |
-| IndexedDB 데이터 손실 | persist() + JSON 내보내기 |
-| 한국어 PDF 폰트 | Noto Sans KR 임베딩 |
+| Gemini API 비용 초과 | Flash 우선 사용, Pro는 설계 시에만 |
+| Claude API 미설정 | Graceful fallback (Gemini 단독 동작) |
+| IndexedDB 데이터 손실 | JSON 내보내기 + ZIP 다운로드 |
+| 가상 수치 신뢰성 문제 | 프롬프트에 가상 수치 금지 규칙 적용 |
+| 대용량 PDF/음성 처리 | PDF 20MB 제한, 음성 30분 제한 |
 | Preview 모델 변경 | GA 모델 출시 시 전환 |
+| API 키 클라이언트 노출 | Phase C에서 프록시 서버 도입 예정 |
+| 프롬프트 인젝션 | systemInstruction 분리로 사용자 데이터 격리 |
+| XSS (Mermaid) | securityLevel: 'strict' + textContent 사용 |
+| Phase 6 오인식 | 정확 매칭 (^...$) 앵커 적용 |

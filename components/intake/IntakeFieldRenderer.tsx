@@ -1,16 +1,21 @@
 import React from 'react';
 import type { IntakeField } from '../../types/intake';
+import { Language } from '../../types';
+import { translations } from '../../translations';
 
 interface IntakeFieldRendererProps {
   field: IntakeField;
   value: string | string[];
   onChange: (fieldId: string, value: string | string[]) => void;
+  lang: Language;
 }
 
-const IntakeFieldRenderer: React.FC<IntakeFieldRendererProps> = ({ field, value, onChange }) => {
-  const label = field.label;
-  const placeholder = field.placeholder || '';
-  const description = field.description || '';
+const IntakeFieldRenderer: React.FC<IntakeFieldRendererProps> = ({ field, value, onChange, lang }) => {
+  const isEn = lang === Language.EN;
+  const t = translations[lang];
+  const label = isEn ? field.labelEn : field.label;
+  const placeholder = (isEn ? field.placeholderEn : field.placeholder) || '';
+  const description = (isEn ? field.descriptionEn : field.description) || '';
 
   const priorityColors: Record<string, string> = {
     P1: 'bg-blue-50 text-blue-600 border-blue-200',
@@ -65,10 +70,10 @@ const IntakeFieldRenderer: React.FC<IntakeFieldRendererProps> = ({ field, value,
           onChange={(e) => onChange(field.id, e.target.value)}
           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
         >
-          <option value="">{placeholder || '선택하세요'}</option>
+          <option value="">{placeholder || t.intakeFormSelectPlaceholder}</option>
           {field.options?.map((opt) => (
             <option key={opt.value} value={opt.value}>
-              {opt.label}
+              {isEn ? opt.labelEn : opt.label}
             </option>
           ))}
         </select>
@@ -93,7 +98,7 @@ const IntakeFieldRenderer: React.FC<IntakeFieldRendererProps> = ({ field, value,
                 onChange={(e) => onChange(field.id, e.target.value)}
                 className="sr-only"
               />
-              {opt.label}
+              {isEn ? opt.labelEn : opt.label}
             </label>
           ))}
         </div>
@@ -125,7 +130,7 @@ const IntakeFieldRenderer: React.FC<IntakeFieldRendererProps> = ({ field, value,
                   }}
                   className="sr-only"
                 />
-                {opt.label}
+                {isEn ? opt.labelEn : opt.label}
               </label>
             );
           })}

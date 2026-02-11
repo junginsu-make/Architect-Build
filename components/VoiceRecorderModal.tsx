@@ -1,21 +1,25 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { Language } from '../types';
+import { translations } from '../translations';
 
 interface VoiceRecorderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUploadAudio: (base64: string, mimeType: string) => void;
+  lang: Language;
 }
 
 const MIN_DURATION = 5;   // seconds
 const MAX_DURATION = 1800; // 30 minutes
 
-const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose, onUploadAudio }) => {
+const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose, onUploadAudio, lang }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isWaitingPermission, setIsWaitingPermission] = useState(false);
   const [duration, setDuration] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = translations[lang];
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -99,7 +103,7 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose
 
       mediaRecorder.onstop = async () => {
         if (chunksRef.current.length === 0) {
-          setError('녹음 데이터가 없습니다. 다시 시도해 주세요.');
+          setError(t.noRecordingData);
           return;
         }
         setIsProcessing(true);
@@ -115,7 +119,7 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose
         };
 
         reader.onerror = () => {
-          setError('녹음 파일 변환에 실패했습니다.');
+          setError(t.conversionFailed);
           setIsProcessing(false);
         };
 
@@ -133,9 +137,9 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose
       setIsWaitingPermission(false);
       const msg = err instanceof Error ? err.name : "Unknown Error";
       if (msg === 'NotAllowedError' || msg === 'PermissionDeniedError') {
-        alert("마이크 접근 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.");
+        alert(t.micDenied);
       } else {
-        alert("녹음을 시작할 수 없습니다. 마이크 연결을 확인해주세요.");
+        alert(t.micError);
       }
       onClose();
     }
@@ -145,7 +149,7 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose
     stopTimer();
     if (mediaRecorderRef.current && isRecording) {
       if (duration < MIN_DURATION) {
-        setError(`최소 ${MIN_DURATION}초 이상 녹음해 주세요.`);
+        setError(`${MIN_DURATION}${t.minDuration}`);
         // Stop recording but discard
         mediaRecorderRef.current.ondataavailable = null;
         mediaRecorderRef.current.onstop = null;
@@ -193,16 +197,16 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose
           </div>
 
           <h3 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">
-            {isProcessing ? 'Analyzing Content...' : (isRecording ? 'Recording Session' : (isWaitingPermission ? 'Requesting Mic...' : 'Voice Intelligence'))}
+            {isProcessing ? t.voiceTitleAnalyzing : (isRecording ? t.voiceTitleRecording : (isWaitingPermission ? t.voiceTitleRequesting : t.voiceTitle))}
           </h3>
           <p className="text-slate-500 text-sm font-medium mb-8 leading-relaxed px-6">
             {isRecording
               ? (duration < MIN_DURATION
-                ? `최소 ${MIN_DURATION}초 이상 녹음해 주세요.`
-                : '회의 내용을 경청하고 비즈니스 맥락을 파악하고 있습니다.')
+                ? `${MIN_DURATION}${t.minDuration}`
+                : t.listeningStatus)
               : (isWaitingPermission
-                ? '마이크 권한 승인을 기다리는 중입니다.'
-                : '마이크를 통해 미팅 내용을 들려주세요.')}
+                ? t.micWaiting
+                : t.micReady)}
           </p>
 
           {error && (
@@ -218,21 +222,21 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose
           <div className="flex gap-4 w-full">
             {!isRecording && !isWaitingPermission ? (
               <>
-                <button onClick={onClose} className="flex-1 py-5 rounded-2xl border border-slate-100 font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all">Cancel</button>
-                <button onClick={startRecording} className="flex-[2] py-5 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/10">Start Recording</button>
+                <button onClick={onClose} className="flex-1 py-5 rounded-2xl border border-slate-100 font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-all">{t.voiceCancel}</button>
+                <button onClick={startRecording} className="flex-[2] py-5 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-900/10">{t.voiceStartRecording}</button>
               </>
             ) : isRecording ? (
-              <button onClick={stopRecording} className="w-full py-6 rounded-2xl bg-red-500 text-white font-black text-xs uppercase tracking-widest hover:bg-red-600 transition-all shadow-xl shadow-red-500/20">Finish & Analyze</button>
+              <button onClick={stopRecording} className="w-full py-6 rounded-2xl bg-red-500 text-white font-black text-xs uppercase tracking-widest hover:bg-red-600 transition-all shadow-xl shadow-red-500/20">{t.voiceFinishAnalyze}</button>
             ) : (
-              <button disabled className="w-full py-6 rounded-2xl bg-slate-100 text-slate-400 font-black text-xs uppercase tracking-widest cursor-not-allowed">Waiting for permission...</button>
+              <button disabled className="w-full py-6 rounded-2xl bg-slate-100 text-slate-400 font-black text-xs uppercase tracking-widest cursor-not-allowed">{t.voiceWaitingPermission}</button>
             )}
           </div>
           
           {isProcessing && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
-               <p className="text-slate-900 font-black text-sm uppercase tracking-widest">Extracting Business Logic</p>
-               <p className="text-slate-400 text-xs mt-2 font-medium">Native Audio AI Processing...</p>
+               <p className="text-slate-900 font-black text-sm uppercase tracking-widest">{t.voiceExtracting}</p>
+               <p className="text-slate-400 text-xs mt-2 font-medium">{t.voiceProcessing}</p>
             </div>
           )}
         </div>

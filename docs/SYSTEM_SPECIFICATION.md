@@ -1,15 +1,15 @@
-# Architect: Enterprise & Agent Builder - System Specification
+# Architect: Enterprise Builder - System Specification
 
 ## 1. 개요 (Overview)
-**Architect**는 기업의 비즈니스 요구사항을 다각도로 분석하여 실제 구현 가능한 엔터프라이즈 솔루션 설계도와 실행 로드맵을 생성하는 AI 기반의 솔루션 빌더입니다. 최신 시장 데이터와 시각적 브랜딩 요소를 결합하여 압도적인 퀄리티의 기획서를 제공합니다.
+**Architect**는 기업의 비즈니스 요구사항을 다각도로 분석하여 **클라이언트용 비즈니스 제안서**와 **개발자용 전문 설계 문서**(PRD, LLD, 스프린트 계획)를 동시에 생성하는 멀티모델 AI 워크벤치입니다.
 
-> **플랫폼**: Google AI Studio 기반 / Vite + React 19 + TypeScript
-> **상태**: PoC (Proof of Concept) — 프로토타입 단계
+> **플랫폼**: Vite 6.2 + React 19 + TypeScript 5.8
+> **AI 엔진**: Google Gemini (비즈니스 분석) + Anthropic Claude Sonnet 4.5 (구현 설계)
+> **상태 관리**: Zustand v5 + Dexie.js (IndexedDB)
 
 ## 2. 핵심 기능 (Key Features)
 
-### 2.1 5단계 비즈니스 진단 프로세스 (Chat Phase)
-사용자와의 대화를 통해 비즈니스 배경, 시스템 모델, 모듈 로직, 기술 환경, KPI 목표를 파악합니다.
+### 2.1 5단계 비즈니스 진단 프로세스
 
 | Phase | 진단 영역 | 동작 방식 |
 |:---:|:---|:---|
@@ -18,128 +18,143 @@
 | 03 | 사용 주체 및 업무 프로세스 | AI 맥락 기반 후속 질문 자동 생성 |
 | 04 | 현재 도구 및 기술 환경 | AI 맥락 기반 후속 질문 자동 생성 |
 | 05 | 최종 비즈니스 목표 (KPI) | AI 맥락 기반 후속 질문 자동 생성 |
-| 06 | 설계 시작 승인 | 사용자 확인 후 Blueprint 생성 |
+| 06 | 수집 데이터 요약 + 설계 승인 | 사용자 확인/수정 후 생성 시작 |
+| 07 | Gemini + Claude 병렬 생성 | 클라이언트 제안서 + 개발자 문서 동시 생성 |
+| 08 | 완료 → 자유 채팅 모드 | 설계 결과에 대한 추가 질문/수정 |
 
-각 후속 질문에는 AI가 생성한 **예시 답변**과 **Tip**이 함께 제공됩니다.
+### 2.2 멀티모델 AI 엔진
 
-### 2.2 실시간 시장 지능 (Market Intelligence)
-- **Google Search Grounding**: `gemini-3-pro-preview` 모델이 실시간 검색을 수행하여 최신 업계 동향, 경쟁사 분석 및 실질적인 ROI 수치를 설계에 반영합니다.
-- **Grounding Citations**: 제안된 전략의 근거가 되는 웹 사이트 링크를 보고서 하단에 즉시 제공하여 신뢰성을 확보합니다.
+| 역할 | 모델 | 산출물 |
+|:---|:---|:---|
+| **비즈니스 분석** | Gemini 3 Pro | 로드맵, 다이어그램, 보안 전략, 클라이언트 제안서 |
+| **구현 설계** | Claude Sonnet 4.5 | PRD, LLD, 스프린트 계획, API 설계, DB 스키마, 핵심 코드 모듈 |
+| **후속 질문** | Gemini 3 Flash | 맥락 기반 질문 + 예시 + 팁 |
+| **문서 분석** | Gemini 3 Flash | 구조화된 문서 분석 (JSON) |
+| **음성 분석** | Gemini 2.0 Flash | 구조화된 회의록 (JSON) |
+| **자유 채팅** | Gemini 3 Flash | 설계 후 후속 상담 |
+| **실시간 통역** | Gemini 2.5 Flash Native Audio | Live API 한국어 ↔ 영어 |
 
-### 2.3 시각적 아이덴티티 생성 (Visual Identity)
-- **Project Logo Generation**: `gemini-2.5-flash-image` 모델을 활용하여 제안된 솔루션의 컨셉에 맞는 전문적인 프로젝트 로고를 자동으로 생성하고 보고서에 포함합니다.
-- 로고 생성 실패 시에도 Blueprint는 정상 반환됩니다 (격리된 에러 처리).
+Claude API 키가 없으면 Gemini 단독으로 동작합니다 (graceful fallback).
+
+### 2.3 클라이언트/개발자 이중 뷰
+
+#### 클라이언트용 (비개발자)
+기술 용어 없이 비즈니스 가치 중심으로 작성:
+- 현재 겪는 문제 정의
+- 해결 방안 (쉬운 표현)
+- 핵심 기능 체크리스트
+- 추진 일정 (마일스톤 타임라인)
+- 기대 효과 (검증되지 않은 가상 수치 금지)
+- 투자 대비 효과 요약
+- 데이터 보호 방안
+
+#### 개발자용 (4탭 구조)
+20년+ 시니어 아키텍트 수준의 전문 문서:
+- **로드맵**: 스프린트 카드 (목표/산출물/의존성) 또는 단계별 로드맵
+- **아키텍처**: Mermaid 다이어그램 (시스템/시퀀스/기술스택)
+- **구현**: 프로젝트 구조, 기술 스택, API 테이블, DB 스키마, 핵심 코드 모듈
+- **문서**: PRD (8개 섹션), LLD (8개 섹션) 마크다운 전문
 
 ### 2.4 멀티모달 입력
-| 입력 방식 | 설명 | 분석 모델 |
+
+| 입력 방식 | 분석 모델 | 결과 형식 |
 |:---|:---|:---|
-| **텍스트 입력** | 채팅 형태 직접 입력 | — |
-| **PDF 업로드** | 사업 기획서, ERD 등 | `gemini-3-flash-preview` |
-| **장문 텍스트 붙여넣기** | 요구사항 문서 복사/붙여넣기 | `gemini-3-flash-preview` |
-| **음성 녹음** | 회의 녹음 → 비즈니스 회의록 자동 생성 | `gemini-2.5-flash-native-audio` |
+| **텍스트 입력** | — | 직접 userResponses에 저장 |
+| **PDF 업로드** (최대 20MB) | `gemini-3-flash-preview` | `DocumentAnalysis` JSON |
+| **장문 텍스트 붙여넣기** | `gemini-3-flash-preview` | `DocumentAnalysis` JSON (text part 직접 전송) |
+| **음성 녹음** (5초~30분) | `gemini-2.0-flash` | `MeetingMinutes` JSON |
 
-문서/음성 분석 결과는 `additionalContext`로 분리 관리되어, 사용자의 단계별 응답(`userResponses`) 인덱스에 영향을 주지 않습니다.
+모든 분석 결과는 구조화된 JSON으로 반환됩니다:
+- **DocumentAnalysis**: 문서 요약, 5대 핵심 영역, 핵심 발견 사항, 데이터 갭, 설계 키워드
+- **MeetingMinutes**: 회의 제목, 요약, 주요 논의 사항, 요구사항, 후속 조치, 설계 키워드
 
-### 2.5 AI 실시간 양방향 통역 (Live Translator)
-- **Gemini Live API** 기반의 실시간 한국어 ↔ 영어 음성 통역.
-- PCM 오디오 스트리밍으로 저지연 양방향 통역 지원.
-- 발화 원문과 번역문이 텍스트로 동시 표시됩니다.
-- 화면 우하단 플로팅 버튼으로 활성화/비활성화.
+사용자가 "문서 기반으로 설계 시작" 또는 "회의록 기반으로 설계 시작"을 입력하면 분석된 designKeywords를 자동 매핑하여 즉시 블루프린트를 생성합니다.
 
-### 2.6 솔루션 설계도 (Blueprint) 산출물
-승인 후 AI가 생성하는 산출물 목록:
+### 2.5 내보내기 시스템
 
-| 산출물 | 형식 | 설명 |
-|:---|:---|:---|
-| 실행 로드맵 | 텍스트 리스트 | 단계별 구현 계획 |
-| 아키텍처 다이어그램 | Mermaid.js | 시스템 구조도 |
-| 시퀀스 다이어그램 | Mermaid.js | 사용자 흐름 |
-| 기술 스택 그래프 | Mermaid.js | 기술 의존성 시각화 |
-| 분석 요약 | 텍스트 | Executive Summary |
-| ROI 추정 | 텍스트 | 시장 데이터 기반 투자 수익률 |
-| 보안 전략 | 텍스트 | 보안/컴플라이언스 방안 |
-| 프로젝트 로고 | PNG (Base64) | AI 생성 비주얼 아이덴티티 |
-| 검색 근거 | URL 리스트 | Google Search 출처 링크 |
-
-### 2.7 결과 내보내기
-- **JSON 추출**: Blueprint 전체 데이터를 `architect-blueprint.json` 파일로 다운로드.
-- **보고서 인쇄**: 브라우저 인쇄 기능으로 결과 패널 출력.
-
-### 2.8 다국어 지원
-- 한국어(KO) / 영어(EN) 전환 지원 (헤더 버튼).
-- UI 텍스트 및 AI 응답 언어가 함께 전환됩니다.
-
-### 2.9 자유 채팅 모드
-- Blueprint 생성 완료(Phase 8) 후, 설계 결과에 대한 추가 질문 및 상담이 가능합니다.
-- 기존 비즈니스 맥락과 추가 컨텍스트가 포함된 상태에서 대화가 이어집니다.
-
-## 3. AI 모델 활용 명세
-
-| 작업 (Task) | 사용 모델 | 주요 특징 |
-|:---|:---|:---|
-| **솔루션 설계** | `gemini-3-pro-preview` | **Google Search 연동**, JSON 스키마 응답, Grounding Metadata 추출 |
-| **비주얼 생성** | `gemini-2.5-flash-image` | 프로젝트 컨셉 로고 실시간 생성 (Base64 출력) |
-| **후속 질문 생성** | `gemini-3-flash-preview` | 맥락 기반 질문 + 예시 + 팁 JSON 구조 생성 |
-| **문서 분석** | `gemini-3-flash-preview` | PDF/텍스트 멀티파트 컨텍스트 처리 |
-| **음성 분석** | `gemini-2.5-flash-native-audio-preview-12-2025` | 네이티브 오디오 컨텍스트 → 회의록 생성 |
-| **실시간 통역** | `gemini-2.5-flash-native-audio-preview-12-2025` | Live API 세션, PCM 16kHz 입력 / 24kHz 출력 |
-| **자유 채팅** | `gemini-3-flash-preview` | 설계 완료 후 후속 상담 |
-
-## 4. 상태 관리 아키텍처
-
-### 4.1 useReducer 기반 중앙 상태 관리
-`App.tsx`에서 `useReducer`를 사용하여 모든 앱 상태를 단일 리듀서로 관리합니다.
-
-```
-AppState {
-  messages[]          — 채팅 메시지 목록
-  isLoading           — AI 처리 중 여부
-  chatPhase           — 현재 진단 단계 (0~8)
-  userResponses[]     — 단계별 사용자 응답 (인덱스 기반)
-  additionalContext[] — 문서/음성 분석 결과 (분리 저장)
-  blueprint           — 생성된 설계도
-  showGuide           — 가이드 패널 표시 여부
-  lang                — 현재 언어 (KO/EN)
-}
-```
-
-`dispatch`의 참조 안정성을 활용하여 `useEffect` 의존성 문제를 해결하고, `stateRef` 패턴으로 콜백 내에서 최신 상태를 안전하게 참조합니다.
-
-### 4.2 에러 처리 전략
-- **서비스 계층**: 모든 함수에서 `checkApiKey()` 호출 후 `throw` 기반 에러 전파.
-- **컴포넌트 계층**: 모든 서비스 호출에 `try-catch-finally` 적용, `isLoading` 상태 보장.
-- **앱 계층**: `ErrorBoundary` 컴포넌트로 예기치 않은 렌더링 에러 포착 및 복구 UI 제공.
-
-## 5. 보안
-
-### 5.1 Content Security Policy (CSP)
-`index.html`에 CSP 메타 태그가 적용되어 허용된 도메인만 스크립트/연결을 허용합니다.
-
-### 5.2 XSS 방지
-Mermaid 다이어그램 렌더링 시 `innerHTML` 대신 `textContent`를 사용하여 AI 생성 문자열의 스크립트 주입을 방지합니다.
-
-### 5.3 API 키 보호
-- Google AI Studio 내부 실행 시 플랫폼이 API 키를 자동 주입합니다.
-- 로컬 실행 시 `.env.local`의 `GEMINI_API_KEY`가 Vite define을 통해 `process.env.API_KEY`로 매핑됩니다.
-- API 키 미설정 시 모듈 크래시 대신 각 함수에서 사용자 친화적 에러 메시지를 반환합니다.
-
-### 5.4 민감 정보 보호
-사용자의 비즈니스 배경 데이터 중 민감 정보는 검색 쿼리에서 제외되도록 프롬프트 가이드라인이 설정되어 있습니다.
-
-## 6. 기대 효과 (Impact)
-1. **데이터 기반 의사결정**: 학습 데이터가 아닌 현재 시점의 시장 데이터를 기반으로 설계합니다.
-2. **시각적 몰입감**: 로고와 다이어그램이 결합된 보고서로 프로젝트의 실체감을 높입니다.
-3. **전문성 확보**: 근거 자료(Citations)를 통해 기획서의 객관적 타당성을 증명합니다.
-4. **접근성**: 텍스트, 문서, 음성 등 다양한 입력 방식으로 비기술 사용자도 쉽게 활용 가능합니다.
-5. **글로벌 대응**: 한국어/영어 전환 및 실시간 통역으로 다국어 비즈니스 환경을 지원합니다.
-
-## 7. 제약 사항 및 로드맵
-| 현재 제약 | 향후 개선 방향 |
+| 기능 | 설명 |
 |:---|:---|
-| 데이터 영속성 없음 (새로고침 시 소실) | DB/LocalStorage 연동 |
-| Preview 모델 의존 (변경/폐기 위험) | GA 모델로 전환 |
+| **클라이언트 보고서 (HTML)** | 독립 HTML 파일 — 브라우저에서 열거나 PDF 저장 가능 |
+| **개발자 문서 (HTML)** | PRD/LLD/스프린트/API/DB 포함 독립 HTML |
+| **클라이언트용 인쇄** | 새 창에서 결과 콘텐츠만 열어 인쇄 |
+| **개발자용 인쇄** | 새 창에서 전문 문서만 열어 인쇄 |
+| **ZIP 전체 다운로드** | 구조화된 폴더 (client/, developer/, diagrams/) |
+| **JSON 원본** | blueprint 전체 데이터 |
+
+ZIP 구조:
+```
+architect-blueprint.zip
+├── blueprint.json
+├── client/
+│   ├── proposal.md
+│   └── proposal.html
+├── developer/
+│   ├── prd.md
+│   ├── lld.md
+│   ├── sprint-plan.md
+│   ├── api-spec.md
+│   ├── db-schema.md
+│   ├── implementation.json
+│   └── full-report.html
+├── diagrams/
+│   ├── architecture.mmd
+│   ├── sequence.mmd
+│   └── tech-stack.mmd
+└── report.md
+```
+
+### 2.6 AI 실시간 양방향 통역
+- Gemini Live API 기반 실시간 한국어 ↔ 영어 음성 통역
+- PCM 오디오 스트리밍 (16kHz 입력 / 24kHz 출력)
+- 플로팅 버튼으로 활성화/비활성화
+
+### 2.7 다국어 지원
+한국어(KO) / 영어(EN) 전환 지원. UI 텍스트 및 AI 응답 언어가 함께 전환됩니다.
+
+## 3. 상태 관리 아키텍처
+
+### 3.1 Zustand 스토어 구조
+
+| 스토어 | 역할 |
+|:---|:---|
+| `chatStore` | messages, isLoading, chatPhase, userResponses, additionalContext |
+| `uiStore` | lang, showGuide, activePanel |
+| `deliverableStore` | blueprint, isExporting |
+| `projectStore` | projects, currentProjectId, CRUD |
+
+### 3.2 커스텀 훅
+- `useChat()`: 전체 채팅 흐름 관리 (5단계 진단, 문서/음성 처리, 블루프린트 생성, 자유 채팅)
+- `stateRef` 패턴으로 콜백 내 최신 상태 안전 참조
+
+## 4. 보안
+
+### 4.1 API 키 보호
+- Gemini: `.env.local`의 `GEMINI_API_KEY` → Vite define → `process.env.API_KEY`
+- Claude: `.env.local`의 `ANTHROPIC_API_KEY` → Vite define → `process.env.ANTHROPIC_API_KEY`
+- API 키 미설정 시 해당 서비스만 비활성화 (앱 전체 크래시 없음)
+
+### 4.2 XSS 방지
+- Mermaid 렌더링: `securityLevel: 'strict'` + `textContent` 사용
+- ChatBubble: 제한된 마크다운만 파싱
+
+### 4.3 프롬프트 인젝션 방어
+- Gemini 서비스 함수에서 `config.systemInstruction`으로 AI 지시문과 사용자 데이터를 격리
+- 사용자 입력이 시스템 프롬프트 컨텍스트에 직접 삽입되지 않음
+
+### 4.4 Phase 6 설계 승인 검증
+- 정확 매칭(`^...$` 앵커) 적용으로 부분 일치 오인식 방지
+- 허용된 확인 키워드만 정확히 일치할 때 생성 단계 진행
+
+### 4.5 클라이언트 보고서 수치 정책
+클라이언트 보고서에 검증되지 않은 가상 수치(%, 금액, 배수, 회수 기간)를 포함하지 않습니다. "업무 효율화 증가", "운영 비용 절감 기대" 등 정성적 표현만 사용합니다.
+
+## 5. 제약 사항 및 로드맵
+
+| 현재 상태 | 향후 개선 방향 |
+|:---|:---|
+| Dexie.js (IndexedDB) 로컬 저장 | 클라우드 동기화 |
+| Preview 모델 의존 | GA 모델로 전환 |
 | 백엔드 부재 (API 키 클라이언트 노출) | 프록시 서버 도입 |
 | 인증/권한 체계 없음 | OAuth/SSO 연동 |
-| 고정된 5단계 선형 흐름 | 단계 이동/수정/건너뛰기 지원 |
-| Mermaid 구문 오류 가능성 | 다이어그램 검증/재생성 로직 |
-| PDF/인쇄만 지원 | DOCX/PPT 내보내기, 공유 링크 |
+| PDF 다운로드 미구현 | html2pdf 또는 서버사이드 PDF 생성 |
+| 이메일 발송 / Google Drive 미구현 | Phase C에서 구현 |

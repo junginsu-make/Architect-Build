@@ -1,18 +1,23 @@
 import React from 'react';
 import type { IntakeFormSchema, IntakeFormData } from '../../types/intake';
+import { Language } from '../../types';
+import { translations } from '../../translations';
 
 interface IntakeFormPreviewProps {
   formData: IntakeFormData;
   schema: IntakeFormSchema;
+  lang: Language;
   onBack: () => void;
   onSubmit: () => void;
 }
 
-const IntakeFormPreview: React.FC<IntakeFormPreviewProps> = ({ formData, schema, onBack, onSubmit }) => {
+const IntakeFormPreview: React.FC<IntakeFormPreviewProps> = ({ formData, schema, lang, onBack, onSubmit }) => {
+  const isEn = lang === Language.EN;
+  const t = translations[lang];
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col flex-1 min-h-0 bg-white">
       {/* Print-friendly preview */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 print:hidden">
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-100 print:hidden">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
@@ -20,20 +25,20 @@ const IntakeFormPreview: React.FC<IntakeFormPreviewProps> = ({ formData, schema,
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
           </svg>
-          양식으로 돌아가기
+          {t.intakeFormBackToForm}
         </button>
         <div className="flex gap-2">
           <button
             onClick={() => window.print()}
             className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
           >
-            인쇄/PDF
+            {t.intakeFormPrintPdf}
           </button>
           <button
             onClick={onSubmit}
             className="px-6 py-2 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 transition-all"
           >
-            설계 시작
+            {t.intakeFormStart}
           </button>
         </div>
       </div>
@@ -45,7 +50,7 @@ const IntakeFormPreview: React.FC<IntakeFormPreviewProps> = ({ formData, schema,
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-                  프로젝트 요구사항 정의서
+                  {t.intakeFormPreviewTitle}
                 </h1>
                 <p className="text-sm text-slate-400 mt-1">Architect Enterprise Builder - Intake Form</p>
               </div>
@@ -62,7 +67,7 @@ const IntakeFormPreview: React.FC<IntakeFormPreviewProps> = ({ formData, schema,
                 <span className="w-6 h-6 bg-slate-900 text-white rounded flex items-center justify-center text-[10px] font-black">
                   {sIdx + 1}
                 </span>
-                {section.title}
+                {isEn ? section.titleEn : section.title}
               </h2>
 
               <div className="grid grid-cols-1 gap-3">
@@ -75,12 +80,12 @@ const IntakeFormPreview: React.FC<IntakeFormPreviewProps> = ({ formData, schema,
                       ? val
                           .map((v) => {
                             const opt = field.options?.find((o) => o.value === v);
-                            return opt ? opt.label : v;
+                            return opt ? (isEn ? opt.labelEn : opt.label) : v;
                           })
                           .join(', ')
                       : '-'
                     : field.options
-                    ? (field.options.find((o) => o.value === val)?.label || val)
+                    ? (field.options.find((o) => o.value === val)?.[isEn ? 'labelEn' : 'label'] || val)
                     : val || '-';
 
                   const isEmpty = displayVal === '-';
@@ -99,7 +104,7 @@ const IntakeFormPreview: React.FC<IntakeFormPreviewProps> = ({ formData, schema,
                           {field.priority}
                         </span>
                         <span className="text-xs font-bold text-slate-600">
-                          {field.label}
+                          {isEn ? field.labelEn : field.label}
                         </span>
                       </div>
                       <div className={`flex-grow text-sm ${isEmpty ? 'text-slate-300 italic' : 'text-slate-800'}`}>
