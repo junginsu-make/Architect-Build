@@ -196,6 +196,14 @@ export const translations = {
     badgeCode: '코드',
     colsLabel: '컬럼',
 
+    // ── ResultPanel hardcoded texts ──
+    diagramRenderFailed: '다이어그램 렌더링 실패',
+    copyMermaidCode: 'Mermaid 코드 복사',
+    sprintBadge: '스프린트',
+    requestBodyLabel: 'Request Body',
+    responseLabel: 'Response',
+    errorCodesLabel: 'Error Codes',
+
     // ── ErrorBoundary ──
     errorTitle: '애플리케이션 오류',
     errorDefault: '예상치 못한 오류가 발생했습니다.',
@@ -241,6 +249,11 @@ export const translations = {
     calendarTimeline: '캘린더 타임라인',
     calendarDays: ['일', '월', '화', '수', '목', '금', '토'],
     sprintLabel: '스프린트',
+
+    // ── Blueprint translation ──
+    translatingContent: '콘텐츠를 번역하고 있습니다...',
+    translatingDesc: '잠시만 기다려 주세요',
+    translationFailed: '일부 콘텐츠 번역에 실패했습니다',
 
     // ── Mobile panel toggle ──
     switchToResult: '결과 보기',
@@ -440,6 +453,14 @@ export const translations = {
     badgeCode: 'CODE',
     colsLabel: 'cols',
 
+    // ── ResultPanel hardcoded texts ──
+    diagramRenderFailed: 'Diagram rendering failed',
+    copyMermaidCode: 'Copy Mermaid Code',
+    sprintBadge: 'Sprint',
+    requestBodyLabel: 'Request Body',
+    responseLabel: 'Response',
+    errorCodesLabel: 'Error Codes',
+
     // ── ErrorBoundary ──
     errorTitle: 'Application Error',
     errorDefault: 'An unexpected error occurred.',
@@ -485,6 +506,11 @@ export const translations = {
     calendarTimeline: 'Calendar Timeline',
     calendarDays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     sprintLabel: 'Sprint',
+
+    // ── Blueprint translation ──
+    translatingContent: 'Translating content...',
+    translatingDesc: 'Please wait a moment',
+    translationFailed: 'Some content could not be translated',
 
     // ── Mobile panel toggle ──
     switchToResult: 'View Results',

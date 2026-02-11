@@ -8,6 +8,7 @@ import { translations } from './translations';
 import { useChat } from './hooks/useChat.tsx';
 import { useUIStore } from './store/uiStore';
 import { useDeliverableStore } from './store/deliverableStore';
+import { translateBlueprint } from './services/geminiService';
 
 const App: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -15,6 +16,11 @@ const App: React.FC = () => {
   const { messages, isLoading, chatPhase, handleSendMessage, handleUploadDocument, handleUploadAudio, triggerBlueprint } = useChat();
   const { lang, showGuide, intakeMode, activePanel, toggleGuide, setIntakeMode, toggleLang, setActivePanel } = useUIStore();
   const blueprint = useDeliverableStore((s) => s.blueprint);
+  const blueprintLang = useDeliverableStore((s) => s.blueprintLang);
+  const translatedBlueprints = useDeliverableStore((s) => s.translatedBlueprints);
+  const isTranslating = useDeliverableStore((s) => s.isTranslating);
+  const setTranslating = useDeliverableStore((s) => s.setTranslating);
+  const setTranslatedBlueprint = useDeliverableStore((s) => s.setTranslatedBlueprint);
 
   const t = translations[lang];
 
@@ -28,6 +34,29 @@ const App: React.FC = () => {
       setActivePanel('result');
     }
   }, [blueprint, setActivePanel]);
+
+  // Trigger blueprint translation when language changes
+  useEffect(() => {
+    if (!blueprint || !blueprintLang) return;
+    if (translatedBlueprints[lang]) return; // cached
+    if (isTranslating) return;
+    if (lang === blueprintLang) return; // original language
+
+    const doTranslate = async () => {
+      setTranslating(true);
+      try {
+        const translated = await translateBlueprint(blueprint, lang);
+        setTranslatedBlueprint(lang, translated);
+      } catch (err) {
+        console.error('Blueprint translation failed:', err);
+      } finally {
+        setTranslating(false);
+      }
+    };
+    doTranslate();
+  }, [lang, blueprint, blueprintLang, translatedBlueprints, isTranslating, setTranslating, setTranslatedBlueprint]);
+
+  const activeBlueprint = translatedBlueprints[lang] ?? blueprint;
 
   const handleIntakeSubmit = (userResponses: string[]) => {
     setIntakeMode('chat');
@@ -129,7 +158,7 @@ const App: React.FC = () => {
       </div>
 
       <div className={`flex-grow h-full bg-[#f1f5f9] overflow-hidden relative ${activePanel !== 'result' ? 'hidden md:block' : 'block'}`}>
-        <ResultPanel isLoading={isLoading && chatPhase === 7} blueprint={blueprint} lang={lang} />
+        <ResultPanel isLoading={isLoading && chatPhase === 7} isTranslating={isTranslating} blueprint={activeBlueprint} lang={lang} />
       </div>
 
       {/* Mobile FAB toggle button */}

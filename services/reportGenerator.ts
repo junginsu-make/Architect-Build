@@ -40,6 +40,13 @@ const reportLabels = {
     securityStrategy: '보안 전략',
     reportTitle: '아키텍트 설계 보고서',
     noDeps: '없음',
+    calendarTimeline: '캘린더 타임라인',
+    thPhase: '단계', thDuration: '기간', thOutcome: '산출물',
+    architectureDiagrams: '아키텍처 다이어그램',
+    systemArchitecture: '시스템 아키텍처',
+    sequenceDiagram: '시퀀스 다이어그램',
+    techStackDiagram: '기술 스택',
+    mermaidNote: '아래 코드를 Mermaid 렌더러(mermaid.live 등)에서 시각화할 수 있습니다.',
   },
   [Language.EN]: {
     clientTitle: 'Solution Proposal',
@@ -77,6 +84,13 @@ const reportLabels = {
     securityStrategy: 'Security Strategy',
     reportTitle: 'Architect Design Report',
     noDeps: 'None',
+    calendarTimeline: 'Calendar Timeline',
+    thPhase: 'Phase', thDuration: 'Duration', thOutcome: 'Outcome',
+    architectureDiagrams: 'Architecture Diagrams',
+    systemArchitecture: 'System Architecture',
+    sequenceDiagram: 'Sequence Diagram',
+    techStackDiagram: 'Tech Stack',
+    mermaidNote: 'Paste the code below into a Mermaid renderer (e.g. mermaid.live) to visualize.',
   },
 };
 
@@ -223,6 +237,14 @@ export function generateClientReportHtml(blueprint: SolutionBlueprint, lang: Lan
           </div>
         </div>
       `).join('\n')}
+
+      <h2>${L.calendarTimeline}</h2>
+      <table>
+        <thead><tr><th>#</th><th>${L.thPhase}</th><th>${L.thDuration}</th><th>${L.thOutcome}</th></tr></thead>
+        <tbody>
+          ${cp.milestones.map((m, i) => `<tr><td style="text-align:center;font-weight:700;color:#3b82f6;">${i + 1}</td><td><strong>${escapeHtml(m.phase)}</strong></td><td>${escapeHtml(m.duration)}</td><td>${escapeHtml(m.outcome)}</td></tr>`).join('\n')}
+        </tbody>
+      </table>
 
       <h2>${L.expectedOutcomes}</h2>
       <div class="section-card" style="background:#f0fdf4;border-color:#bbf7d0;">
@@ -371,6 +393,34 @@ export function generateDeveloperReportHtml(blueprint: SolutionBlueprint, lang: 
   }
 
   body += `<h2>${L.roadmap}</h2><ol>${blueprint.roadmap.map(step => `<li>${escapeHtml(step)}</li>`).join('\n')}</ol>`;
+
+  // Architecture diagrams (Mermaid source code)
+  if (blueprint.architectureDiagram || blueprint.sequenceDiagram || blueprint.techStackGraph) {
+    body += `<h2>${L.architectureDiagrams}</h2>`;
+    body += `<p style="font-size:12px;color:#94a3b8;font-style:italic;">${L.mermaidNote}</p>`;
+    if (blueprint.architectureDiagram) {
+      body += `<h3>${L.systemArchitecture}</h3><pre>${escapeHtml(blueprint.architectureDiagram)}</pre>`;
+    }
+    if (blueprint.sequenceDiagram) {
+      body += `<h3>${L.sequenceDiagram}</h3><pre>${escapeHtml(blueprint.sequenceDiagram)}</pre>`;
+    }
+    if (blueprint.techStackGraph) {
+      body += `<h3>${L.techStackDiagram}</h3><pre>${escapeHtml(blueprint.techStackGraph)}</pre>`;
+    }
+  }
+
+  // Analysis summary, ROI, security
+  if (blueprint.analysisSummary) {
+    body += `<h2>${L.analysisSummary}</h2>${markdownToHtml(blueprint.analysisSummary)}`;
+  }
+
+  if (blueprint.estimatedROI) {
+    body += `<h2>${L.estimatedROI}</h2>${markdownToHtml(blueprint.estimatedROI)}`;
+  }
+
+  if (blueprint.securityStrategy) {
+    body += `<h2>${L.securityStrategy}</h2>${markdownToHtml(blueprint.securityStrategy)}`;
+  }
 
   body += `<div class="footer">Architect Enterprise Builder</div>`;
 

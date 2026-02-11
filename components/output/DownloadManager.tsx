@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import type { SolutionBlueprint } from '../../services/geminiService';
 import { Language } from '../../types/common';
 import { generateClientReportHtml, generateDeveloperReportHtml, downloadHtml, printReport } from '../../services/reportGenerator';
+import { useDeliverableStore } from '../../store/deliverableStore';
 import ExportButton from './ExportButton';
 
 interface DownloadManagerProps {
@@ -14,29 +15,33 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [reportLang, setReportLang] = useState<Language>(lang);
+  const translatedBlueprints = useDeliverableStore((s) => s.translatedBlueprints);
+
+  // Use translated blueprint matching reportLang if available, otherwise fall back to current blueprint
+  const getExportBlueprint = () => translatedBlueprints[reportLang] ?? blueprint;
 
   const handleClientHtmlDownload = () => {
-    const html = generateClientReportHtml(blueprint, reportLang);
+    const html = generateClientReportHtml(getExportBlueprint(), reportLang);
     downloadHtml(html, 'client-proposal.html');
   };
 
   const handleDeveloperHtmlDownload = () => {
-    const html = generateDeveloperReportHtml(blueprint, reportLang);
+    const html = generateDeveloperReportHtml(getExportBlueprint(), reportLang);
     downloadHtml(html, 'developer-docs.html');
   };
 
   const handlePrintClient = () => {
-    const html = generateClientReportHtml(blueprint, reportLang);
+    const html = generateClientReportHtml(getExportBlueprint(), reportLang);
     printReport(html);
   };
 
   const handlePrintDeveloper = () => {
-    const html = generateDeveloperReportHtml(blueprint, reportLang);
+    const html = generateDeveloperReportHtml(getExportBlueprint(), reportLang);
     printReport(html);
   };
 
   const handleJsonDownload = () => {
-    const dataStr = JSON.stringify(blueprint, null, 2);
+    const dataStr = JSON.stringify(getExportBlueprint(), null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -50,13 +55,14 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
     setIsExporting(true);
     try {
       const zip = new JSZip();
+      const bp = getExportBlueprint();
 
       // Blueprint JSON (root)
-      zip.file('blueprint.json', JSON.stringify(blueprint, null, 2));
+      zip.file('blueprint.json', JSON.stringify(bp, null, 2));
 
       // ── client/ ──
-      if (blueprint.clientProposal) {
-        const cp = blueprint.clientProposal;
+      if (bp.clientProposal) {
+        const cp = bp.clientProposal;
         const isKo = reportLang === Language.KO;
         const proposalMd = [
           `# ${isKo ? '프로젝트 제안서' : 'Project Proposal'}`,
@@ -86,12 +92,12 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
           cp.investmentSummary,
         ].join('\n');
         zip.file('client/proposal.md', proposalMd);
-        zip.file('client/proposal.html', generateClientReportHtml(blueprint, reportLang));
+        zip.file('client/proposal.html', generateClientReportHtml(bp, reportLang));
       }
 
       // ── developer/ ──
-      if (blueprint.implementationPlan) {
-        const impl = blueprint.implementationPlan;
+      if (bp.implementationPlan) {
+        const impl = bp.implementationPlan;
 
         // PRD
         if (impl.prd) {
@@ -205,18 +211,18 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
         }
 
         // Developer HTML report
-        zip.file('developer/full-report.html', generateDeveloperReportHtml(blueprint, reportLang));
+        zip.file('developer/full-report.html', generateDeveloperReportHtml(bp, reportLang));
       }
 
       // ── diagrams/ ──
-      if (blueprint.architectureDiagram) {
-        zip.file('diagrams/architecture.mmd', blueprint.architectureDiagram);
+      if (bp.architectureDiagram) {
+        zip.file('diagrams/architecture.mmd', bp.architectureDiagram);
       }
-      if (blueprint.sequenceDiagram) {
-        zip.file('diagrams/sequence.mmd', blueprint.sequenceDiagram);
+      if (bp.sequenceDiagram) {
+        zip.file('diagrams/sequence.mmd', bp.sequenceDiagram);
       }
-      if (blueprint.techStackGraph) {
-        zip.file('diagrams/tech-stack.mmd', blueprint.techStackGraph);
+      if (bp.techStackGraph) {
+        zip.file('diagrams/tech-stack.mmd', bp.techStackGraph);
       }
 
       // ── report.md (root) ──
@@ -225,19 +231,19 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
         `# ${isKoReport ? '아키텍트 설계 보고서' : 'Architect Design Report'}`,
         ``,
         `## ${isKoReport ? '실행 로드맵' : 'Execution Roadmap'}`,
-        ...blueprint.roadmap.map((step, i) => `${i + 1}. ${step}`),
+        ...bp.roadmap.map((step, i) => `${i + 1}. ${step}`),
         ``,
         `## ${isKoReport ? '분석 요약' : 'Analysis Summary'}`,
-        blueprint.analysisSummary,
+        bp.analysisSummary,
         ``,
         `## ${isKoReport ? '예상 ROI' : 'Estimated ROI'}`,
-        blueprint.estimatedROI,
+        bp.estimatedROI,
         ``,
         `## ${isKoReport ? '보안 전략' : 'Security Strategy'}`,
-        blueprint.securityStrategy,
+        bp.securityStrategy,
         ``,
-        ...(blueprint.sources?.length
-          ? [`## ${isKoReport ? '참고 자료' : 'References'}`, ...blueprint.sources
+        ...(bp.sources?.length
+          ? [`## ${isKoReport ? '참고 자료' : 'References'}`, ...bp.sources
               .filter((s) => { try { const u = new URL(s.uri); return u.protocol === 'https:' || u.protocol === 'http:'; } catch { return false; } })
               .map((s) => `- [${s.title}](${s.uri})`)]
           : []),

@@ -625,6 +625,204 @@ ${matchedTechNames ? `- 다이어그램의 기술 노드에는 다음 검증된 
   return blueprint;
 };
 
+/**
+ * Translate an existing SolutionBlueprint to a target language using 3 parallel Gemini Flash calls.
+ * Diagrams, code blocks, URLs, dates, numbers, and technical identifiers are preserved.
+ */
+export const translateBlueprint = async (
+  blueprint: SolutionBlueprint,
+  targetLang: Language,
+): Promise<SolutionBlueprint> => {
+  checkApiKey(targetLang);
+  const ai = getAI();
+  const langName = targetLang === Language.KO ? 'Korean' : 'English';
+
+  const systemPrompt = `You are a professional translator. Translate the JSON values to ${langName}.
+RULES:
+- Only translate string VALUES, never change JSON keys or structure.
+- Preserve markdown formatting, code blocks (\`\`\`), URLs, dates, numbers.
+- Do NOT translate: code inside \`\`\`, file paths, function/class names, technical identifiers, version numbers.
+- Maintain professional business/technical tone.
+- Return valid JSON only. No markdown fencing around the JSON.`;
+
+  // ── Call 1: Core fields + ClientProposal ──
+  const corePayload: Record<string, unknown> = {
+    roadmap: blueprint.roadmap,
+    analysisSummary: blueprint.analysisSummary,
+    estimatedROI: blueprint.estimatedROI,
+    securityStrategy: blueprint.securityStrategy,
+  };
+  if (blueprint.clientProposal) {
+    corePayload.clientProposal = blueprint.clientProposal;
+  }
+
+  const call1 = ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: JSON.stringify(corePayload),
+    config: { systemInstruction: systemPrompt },
+  });
+
+  // ── Call 2: ImplementationPlan structured fields (skip if no impl) ──
+  const impl = blueprint.implementationPlan;
+  const call2 = impl
+    ? ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: JSON.stringify({
+          techStack: impl.techStack.map((ts) => ({ category: ts.category, purpose: ts.purpose })),
+          apiDesign: impl.apiDesign.map((a) => ({ description: a.description })),
+          databaseDesign: impl.databaseDesign.map((d) => ({ description: d.description })),
+          keyModules: impl.keyModules.map((m) => ({ description: m.description })),
+          sprintPlan: impl.sprintPlan.map((sp) => ({ title: sp.title, goals: sp.goals, deliverables: sp.deliverables, dependencies: sp.dependencies })),
+        }),
+        config: { systemInstruction: systemPrompt },
+      })
+    : null;
+
+  // ── Call 3: ImplementationPlan markdown documents (skip if no impl) ──
+  const call3 = impl
+    ? ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: JSON.stringify({
+          prd: impl.prd,
+          lld: impl.lld,
+          deploymentPlan: impl.deploymentPlan,
+          testingStrategy: impl.testingStrategy,
+          projectStructure: impl.projectStructure,
+        }),
+        config: {
+          systemInstruction: systemPrompt + '\n- For markdown documents: translate prose text but preserve code blocks, file paths, command examples, and technical terms inside backticks.',
+        },
+      })
+    : null;
+
+  // ── Execute all calls in parallel ──
+  const promises = [call1, call2, call3].filter(Boolean);
+  const results = await Promise.allSettled(promises);
+
+  // ── Parse Call 1 ──
+  let translatedCore: typeof corePayload = {};
+  if (results[0].status === 'fulfilled') {
+    try {
+      const raw = results[0].value.text?.trim() ?? '{}';
+      // Strip markdown code fences if present
+      const cleaned = raw.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```$/i, '');
+      translatedCore = JSON.parse(cleaned);
+    } catch (e) {
+      console.error('Blueprint translation: Call 1 parse failed', e);
+    }
+  } else {
+    console.error('Blueprint translation: Call 1 failed', results[0].reason);
+  }
+
+  // ── Build translated blueprint (start from original) ──
+  const translated: SolutionBlueprint = {
+    ...blueprint,
+    roadmap: (translatedCore.roadmap as string[]) ?? blueprint.roadmap,
+    analysisSummary: (translatedCore.analysisSummary as string) ?? blueprint.analysisSummary,
+    estimatedROI: (translatedCore.estimatedROI as string) ?? blueprint.estimatedROI,
+    securityStrategy: (translatedCore.securityStrategy as string) ?? blueprint.securityStrategy,
+    // Diagrams are NEVER translated
+    architectureDiagram: blueprint.architectureDiagram,
+    sequenceDiagram: blueprint.sequenceDiagram,
+    techStackGraph: blueprint.techStackGraph,
+    sources: blueprint.sources,
+  };
+
+  // ClientProposal
+  if (blueprint.clientProposal && translatedCore.clientProposal) {
+    const tc = translatedCore.clientProposal as Record<string, unknown>;
+    translated.clientProposal = {
+      problemStatement: (tc.problemStatement as string) ?? blueprint.clientProposal.problemStatement,
+      solutionOverview: (tc.solutionOverview as string) ?? blueprint.clientProposal.solutionOverview,
+      keyFeatures: (tc.keyFeatures as string[]) ?? blueprint.clientProposal.keyFeatures,
+      milestones: Array.isArray(tc.milestones)
+        ? (tc.milestones as ClientMilestone[]).map((m, i) => ({
+            phase: m.phase ?? blueprint.clientProposal!.milestones[i]?.phase ?? '',
+            duration: blueprint.clientProposal!.milestones[i]?.duration ?? m.duration ?? '',
+            outcome: m.outcome ?? blueprint.clientProposal!.milestones[i]?.outcome ?? '',
+          }))
+        : blueprint.clientProposal.milestones,
+      expectedOutcomes: (tc.expectedOutcomes as string) ?? blueprint.clientProposal.expectedOutcomes,
+      dataProtection: (tc.dataProtection as string) ?? blueprint.clientProposal.dataProtection,
+      investmentSummary: (tc.investmentSummary as string) ?? blueprint.clientProposal.investmentSummary,
+    };
+  }
+
+  // ── ImplementationPlan merging ──
+  if (impl) {
+    const mergedImpl = { ...impl };
+    const resultIdx2 = call2 ? 1 : -1;
+    const resultIdx3 = call3 ? (call2 ? 2 : 1) : -1;
+
+    // Parse Call 2 (structured fields)
+    if (resultIdx2 >= 0 && results[resultIdx2]?.status === 'fulfilled') {
+      try {
+        const raw = (results[resultIdx2] as PromiseFulfilledResult<any>).value.text?.trim() ?? '{}';
+        const cleaned = raw.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```$/i, '');
+        const parsed = JSON.parse(cleaned);
+
+        if (parsed.techStack) {
+          mergedImpl.techStack = impl.techStack.map((ts, i) => ({
+            ...ts,
+            category: parsed.techStack[i]?.category ?? ts.category,
+            purpose: parsed.techStack[i]?.purpose ?? ts.purpose,
+          }));
+        }
+        if (parsed.apiDesign) {
+          mergedImpl.apiDesign = impl.apiDesign.map((a, i) => ({
+            ...a,
+            description: parsed.apiDesign[i]?.description ?? a.description,
+          }));
+        }
+        if (parsed.databaseDesign) {
+          mergedImpl.databaseDesign = impl.databaseDesign.map((d, i) => ({
+            ...d,
+            description: parsed.databaseDesign[i]?.description ?? d.description,
+          }));
+        }
+        if (parsed.keyModules) {
+          mergedImpl.keyModules = impl.keyModules.map((m, i) => ({
+            ...m,
+            description: parsed.keyModules[i]?.description ?? m.description,
+          }));
+        }
+        if (parsed.sprintPlan) {
+          mergedImpl.sprintPlan = impl.sprintPlan.map((sp, i) => ({
+            ...sp,
+            title: parsed.sprintPlan[i]?.title ?? sp.title,
+            goals: parsed.sprintPlan[i]?.goals ?? sp.goals,
+            deliverables: parsed.sprintPlan[i]?.deliverables ?? sp.deliverables,
+            dependencies: parsed.sprintPlan[i]?.dependencies ?? sp.dependencies,
+          }));
+        }
+      } catch (e) {
+        console.error('Blueprint translation: Call 2 parse failed', e);
+      }
+    }
+
+    // Parse Call 3 (markdown documents)
+    if (resultIdx3 >= 0 && results[resultIdx3]?.status === 'fulfilled') {
+      try {
+        const raw = (results[resultIdx3] as PromiseFulfilledResult<any>).value.text?.trim() ?? '{}';
+        const cleaned = raw.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?\s*```$/i, '');
+        const parsed = JSON.parse(cleaned);
+
+        if (parsed.prd) mergedImpl.prd = parsed.prd;
+        if (parsed.lld) mergedImpl.lld = parsed.lld;
+        if (parsed.deploymentPlan) mergedImpl.deploymentPlan = parsed.deploymentPlan;
+        if (parsed.testingStrategy) mergedImpl.testingStrategy = parsed.testingStrategy;
+        if (parsed.projectStructure) mergedImpl.projectStructure = parsed.projectStructure;
+      } catch (e) {
+        console.error('Blueprint translation: Call 3 parse failed', e);
+      }
+    }
+
+    translated.implementationPlan = mergedImpl;
+  }
+
+  return translated;
+};
+
 export const generateContinuingChat = async (
   userResponses: string[],
   newMessage: string,

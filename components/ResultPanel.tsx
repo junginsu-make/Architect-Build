@@ -7,6 +7,7 @@ import DownloadManager from './output/DownloadManager';
 
 interface ResultPanelProps {
   isLoading: boolean;
+  isTranslating?: boolean;
   blueprint: SolutionBlueprint | null;
   lang: Language;
 }
@@ -262,11 +263,11 @@ const Mermaid: React.FC<{
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
               </svg>
-              <span className="text-xs font-semibold">Diagram rendering failed</span>
+              <span className="text-xs font-semibold">{t.diagramRenderFailed}</span>
             </div>
             <pre className="p-3 bg-slate-100 rounded-lg text-xs font-mono text-slate-600 overflow-x-auto max-h-[200px] overflow-y-auto whitespace-pre-wrap">{chart.replace(/\\n/g, '\n')}</pre>
             <button onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(chart.replace(/\\n/g, '\n')); }} className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
-              Copy Mermaid Code
+              {t.copyMermaidCode}
             </button>
           </div>
         ) : (
@@ -532,7 +533,7 @@ const CalendarTimeline: React.FC<{
 /* ══════════════════════════════════════════════════════════
    Main Panel
    ══════════════════════════════════════════════════════════ */
-const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang }) => {
+const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, isTranslating, blueprint, lang }) => {
   const [activeTab, setActiveTab] = useState<DevTab>('roadmap');
   const [viewMode, setViewMode] = useState<ViewMode>('developer');
   const [expandedDiagram, setExpandedDiagram] = useState<{ chart: string; title: string } | null>(null);
@@ -581,7 +582,14 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
   if (viewMode === 'client') {
     const cp = blueprint.clientProposal;
     return (
-      <div className="flex flex-col h-full overflow-hidden bg-white">
+      <div className="flex flex-col h-full overflow-hidden bg-white relative">
+        {isTranslating && (
+          <div className="absolute inset-0 z-40 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
+            <div className="w-10 h-10 border-[3px] border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-sm font-semibold text-slate-700">{t.translatingContent}</p>
+            <p className="text-xs text-slate-400 mt-1">{t.translatingDesc}</p>
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-center justify-between px-4 md:px-8 py-4 bg-white border-b border-slate-200 z-20">
           <div className="flex items-center gap-3">
@@ -778,7 +786,14 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
   const visibleTabs = tabs.filter(tb => tb.show);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-white">
+    <div className="flex flex-col h-full overflow-hidden bg-white relative">
+      {isTranslating && (
+        <div className="absolute inset-0 z-40 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
+          <div className="w-10 h-10 border-[3px] border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+          <p className="text-sm font-semibold text-slate-700">{t.translatingContent}</p>
+          <p className="text-xs text-slate-400 mt-1">{t.translatingDesc}</p>
+        </div>
+      )}
       {expandedDiagram && <DiagramModal chart={expandedDiagram.chart} title={expandedDiagram.title} onClose={() => setExpandedDiagram(null)} lang={lang} />}
 
       {/* Header */}
@@ -883,7 +898,7 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
                             </div>
                             <span className={`px-2 py-1 rounded-lg text-[10px] font-bold ${
                               idx === 0 ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-400'
-                            }`}>Sprint {sp.sprint}</span>
+                            }`}>{t.sprintBadge} {sp.sprint}</span>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -987,30 +1002,28 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
                 </div>
               </SectionCard>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <SectionCard className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border-blue-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-blue-600">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
-                      </svg>
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-900">{t.estimatedROI}</h4>
+              <SectionCard className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border-blue-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-blue-600">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+                    </svg>
                   </div>
-                  <MarkdownText text={blueprint.estimatedROI} />
-                </SectionCard>
-                <SectionCard className="bg-gradient-to-br from-slate-50 to-slate-100/50 border-slate-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-slate-600">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-                      </svg>
-                    </div>
-                    <h4 className="text-sm font-bold text-slate-900">{t.securityStrategy}</h4>
+                  <h4 className="text-sm font-bold text-slate-900">{t.estimatedROI}</h4>
+                </div>
+                <MarkdownText text={blueprint.estimatedROI} />
+              </SectionCard>
+              <SectionCard className="bg-gradient-to-br from-slate-50 to-slate-100/50 border-slate-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-slate-600">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+                    </svg>
                   </div>
-                  <MarkdownText text={blueprint.securityStrategy} />
-                </SectionCard>
-              </div>
+                  <h4 className="text-sm font-bold text-slate-900">{t.securityStrategy}</h4>
+                </div>
+                <MarkdownText text={blueprint.securityStrategy} />
+              </SectionCard>
 
               {blueprint.sources && blueprint.sources.length > 0 && (
                 <SectionCard>
@@ -1072,32 +1085,30 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
                 </div>
               </SectionCard>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <SectionCard className="p-0 overflow-hidden">
-                  <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t.techStack}</span>
-                  </div>
-                  <div className="p-2">
-                    <Mermaid chart={blueprint.techStackGraph}
-                      onExpand={() => setExpandedDiagram({ chart: blueprint.techStackGraph, title: t.techStack })}
-                      onDownload={() => downloadMmd(blueprint.techStackGraph, 'tech-stack.mmd')}
-                      lang={lang} />
-                  </div>
-                </SectionCard>
-                <SectionCard className="p-0 overflow-hidden">
-                  <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-400"></span>
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t.sequenceFlow}</span>
-                  </div>
-                  <div className="p-2">
-                    <Mermaid chart={blueprint.sequenceDiagram}
-                      onExpand={() => setExpandedDiagram({ chart: blueprint.sequenceDiagram, title: t.sequenceFlow })}
-                      onDownload={() => downloadMmd(blueprint.sequenceDiagram, 'sequence.mmd')}
-                      lang={lang} />
-                  </div>
-                </SectionCard>
-              </div>
+              <SectionCard className="p-0 overflow-hidden">
+                <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t.techStack}</span>
+                </div>
+                <div className="p-2">
+                  <Mermaid chart={blueprint.techStackGraph}
+                    onExpand={() => setExpandedDiagram({ chart: blueprint.techStackGraph, title: t.techStack })}
+                    onDownload={() => downloadMmd(blueprint.techStackGraph, 'tech-stack.mmd')}
+                    lang={lang} />
+                </div>
+              </SectionCard>
+              <SectionCard className="p-0 overflow-hidden">
+                <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t.sequenceFlow}</span>
+                </div>
+                <div className="p-2">
+                  <Mermaid chart={blueprint.sequenceDiagram}
+                    onExpand={() => setExpandedDiagram({ chart: blueprint.sequenceDiagram, title: t.sequenceFlow })}
+                    onDownload={() => downloadMmd(blueprint.sequenceDiagram, 'sequence.mmd')}
+                    lang={lang} />
+                </div>
+              </SectionCard>
             </>
           )}
 
@@ -1108,7 +1119,6 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
               <>
                 <div className="flex items-center gap-2">
                   <h3 className="text-xl font-bold text-slate-900">{t.implPlan}</h3>
-                  <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-semibold rounded">Claude Sonnet 4.5</span>
                 </div>
 
                 {/* Project Structure */}
@@ -1226,19 +1236,19 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
                           <div className="mt-3 pt-3 border-t border-slate-100 space-y-3">
                             {api.requestBody && (
                               <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Request Body</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{t.requestBodyLabel}</p>
                                 <pre className="p-3 bg-slate-50 rounded-lg text-xs font-mono text-slate-600 overflow-x-auto whitespace-pre-wrap">{api.requestBody}</pre>
                               </div>
                             )}
                             {api.responseBody && (
                               <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Response</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{t.responseLabel}</p>
                                 <pre className="p-3 bg-green-50 rounded-lg text-xs font-mono text-green-700 overflow-x-auto whitespace-pre-wrap">{api.responseBody}</pre>
                               </div>
                             )}
                             {api.errorCodes && api.errorCodes.length > 0 && (
                               <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Error Codes</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{t.errorCodesLabel}</p>
                                 <div className="flex flex-wrap gap-1.5">
                                   {api.errorCodes.map((code, j) => (
                                     <span key={j} className="text-[10px] px-2 py-1 bg-red-50 text-red-600 rounded-md border border-red-100 font-mono">{code}</span>

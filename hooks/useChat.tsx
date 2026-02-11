@@ -265,7 +265,7 @@ export function useChat() {
             }
 
             // Show Gemini results immediately in the result panel
-            setBlueprint({ ...geminiResult });
+            setBlueprint({ ...geminiResult }, currentLang);
 
             if (usesClaude) {
               // Gemini done — show progress, Claude still working
@@ -290,7 +290,7 @@ export function useChat() {
               // Wait for Claude (may already be done)
               const claudeResult = await claudePromise;
               if (claudeResult) {
-                setBlueprint({ ...geminiResult, implementationPlan: claudeResult });
+                setBlueprint({ ...geminiResult, implementationPlan: claudeResult }, currentLang);
               }
 
               // Completion message
