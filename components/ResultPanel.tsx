@@ -215,8 +215,12 @@ const Mermaid: React.FC<{
       // Normalize: convert literal \n to actual newlines for Mermaid parsing
       const normalized = chart.replace(/\\n/g, '\n').replace(/\\t/g, '  ');
       ref.current.textContent = normalized;
-      const renderDiagram = async () => {
+      const renderDiagram = async (retries = 3) => {
         try {
+          // Wait for Mermaid CDN to load if not yet available
+          for (let i = 0; i < retries && !(window as any).mermaid; i++) {
+            await new Promise(r => setTimeout(r, 500));
+          }
           if ((window as any).mermaid) {
             await new Promise(r => setTimeout(r, 200));
             await (window as any).mermaid.run({ nodes: [ref.current] });
@@ -823,7 +827,6 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, isTranslating, blu
               }`}
             >
               {tab.label}
-              {tab.key === 'implementation' && <span className="ml-1 px-1 py-0.5 bg-purple-100 text-purple-600 text-[9px] rounded font-bold">Claude</span>}
             </button>
           ))}
         </div>
@@ -1392,7 +1395,6 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, isTranslating, blu
               <>
                 <div className="flex items-center gap-2">
                   <h3 className="text-xl font-bold text-slate-900">{t.devDocuments}</h3>
-                  <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-semibold rounded">Claude Sonnet 4.5</span>
                 </div>
 
                 {/* Sub-tabs */}
