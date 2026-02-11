@@ -356,6 +356,25 @@ function parseDateRange(duration: string): { start: Date; end: Date } | null {
   return null;
 }
 
+function parseDurationToDays(duration: string): number {
+  // "2주" / "2 weeks" → 14
+  const weekMatch = duration.match(/(\d+)\s*(?:주|weeks?)/i);
+  if (weekMatch) return parseInt(weekMatch[1]) * 7;
+  // "1개월" / "1 month" → 30
+  const monthMatch = duration.match(/(\d+)\s*(?:개월|months?)/i);
+  if (monthMatch) return parseInt(monthMatch[1]) * 30;
+  // "1-2주" → average
+  const rangeWeek = duration.match(/(\d+)\s*[-~]\s*(\d+)\s*(?:주|weeks?)/i);
+  if (rangeWeek) return Math.round((parseInt(rangeWeek[1]) + parseInt(rangeWeek[2])) / 2 * 7);
+  // "1-2개월" → average
+  const rangeMonth = duration.match(/(\d+)\s*[-~]\s*(\d+)\s*(?:개월|months?)/i);
+  if (rangeMonth) return Math.round((parseInt(rangeMonth[1]) + parseInt(rangeMonth[2])) / 2 * 30);
+  // "90일" / "90 days" → 90
+  const dayMatch = duration.match(/(\d+)\s*(?:일|days?)/i);
+  if (dayMatch) return parseInt(dayMatch[1]);
+  return 14; // default 2 weeks
+}
+
 interface SprintDateRange {
   sprint: number;
   title: string;
@@ -365,22 +384,41 @@ interface SprintDateRange {
 }
 
 const CalendarTimeline: React.FC<{
-  sprintPlan: { sprint: number; title: string; duration: string }[];
+  sprintPlan?: { sprint: number; title: string; duration: string }[];
+  milestones?: { phase: string; duration: string; outcome: string }[];
   lang: Language;
-}> = ({ sprintPlan, lang }) => {
+}> = ({ sprintPlan, milestones, lang }) => {
   const t = translations[lang];
   const dayHeaders: string[] = t.calendarDays;
   const monthNames = lang === Language.KO
     ? ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
     : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+  // Try sprint plan dates first (Claude data)
   const sprintRanges: SprintDateRange[] = [];
-  sprintPlan.forEach((sp, idx) => {
-    const range = parseDateRange(sp.duration);
-    if (range) {
-      sprintRanges.push({ sprint: sp.sprint, title: sp.title, start: range.start, end: range.end, colorIdx: idx % SPRINT_COLORS.length });
-    }
-  });
+  if (sprintPlan && sprintPlan.length > 0) {
+    sprintPlan.forEach((sp, idx) => {
+      const range = parseDateRange(sp.duration);
+      if (range) {
+        sprintRanges.push({ sprint: sp.sprint, title: sp.title, start: range.start, end: range.end, colorIdx: idx % SPRINT_COLORS.length });
+      }
+    });
+  }
+
+  // Fallback: generate synthetic dates from milestones (Gemini data)
+  if (sprintRanges.length === 0 && milestones && milestones.length > 0) {
+    let cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    milestones.forEach((ms, idx) => {
+      const days = parseDurationToDays(ms.duration);
+      const start = new Date(cursor);
+      const end = new Date(cursor);
+      end.setDate(end.getDate() + days - 1);
+      sprintRanges.push({ sprint: idx + 1, title: ms.phase, start, end, colorIdx: idx % SPRINT_COLORS.length });
+      cursor = new Date(end);
+      cursor.setDate(cursor.getDate() + 1);
+    });
+  }
 
   if (sprintRanges.length === 0) return null;
 
@@ -423,7 +461,7 @@ const CalendarTimeline: React.FC<{
           return (
             <div key={sr.sprint} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold ${c.bg} ${c.text} border ${c.border}`}>
               <span className={`w-2 h-2 rounded-full ${c.dot}`}></span>
-              {t.sprintLabel || 'Sprint'} {sr.sprint}: {sr.title}
+              {sr.title}
             </div>
           );
         })}
@@ -461,7 +499,7 @@ const CalendarTimeline: React.FC<{
                       ? 'text-slate-300'
                       : 'text-slate-400'
                 }`}
-                title={sprint ? `${t.sprintLabel || 'Sprint'} ${sprint.sprint}: ${sprint.title}` : ''}
+                title={sprint ? sprint.title : ''}
               >
                 {d}
               </div>
@@ -634,6 +672,13 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
                   </div>
                 </SectionCard>
 
+                {/* 4-1. Calendar Timeline in Client View */}
+                <CalendarTimeline
+                  sprintPlan={blueprint.implementationPlan?.sprintPlan}
+                  milestones={cp.milestones}
+                  lang={lang}
+                />
+
                 {/* 5. Expected Outcomes */}
                 <SectionCard className="bg-green-50/50 border-green-100">
                   <div className="flex items-start gap-4">
@@ -780,6 +825,13 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
                 <h3 className="text-xl font-bold text-slate-900">{t.executionRoadmap}</h3>
               </div>
 
+              {/* Calendar Timeline — works with both Claude sprints and Gemini milestones */}
+              <CalendarTimeline
+                sprintPlan={hasImpl ? blueprint.implementationPlan!.sprintPlan : undefined}
+                milestones={blueprint.clientProposal?.milestones}
+                lang={lang}
+              />
+
               {/* Sprint Plan (if available) */}
               {hasImpl && blueprint.implementationPlan!.sprintPlan.length > 0 ? (
                 <div className="relative">
@@ -798,9 +850,6 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, blueprint, lang })
                       ))}
                     </div>
                   </div>
-
-                  {/* Calendar Timeline */}
-                  <CalendarTimeline sprintPlan={blueprint.implementationPlan!.sprintPlan} lang={lang} />
 
                   {/* Timeline line */}
                   <div className="absolute left-[23px] top-[120px] bottom-6 w-0.5 bg-gradient-to-b from-blue-400 via-blue-300 to-slate-200 rounded-full"></div>
