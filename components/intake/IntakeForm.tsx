@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import type { IntakeFormSchema, IntakeFormData } from '../../types/intake';
 import IntakeFieldRenderer from './IntakeFieldRenderer';
 import IntakeFormPreview from './IntakeFormPreview';
 import { useUIStore } from '../../store/uiStore';
 import { translations } from '../../translations';
 import { Language } from '../../types';
+import { SUPPORTED_DOC_MIME_TYPES, type FileEntry } from '../../services/geminiService';
 
 // Intake Form Schema: 5 sections mapped to the 5 diagnostic questions
 const intakeSchema: IntakeFormSchema = {
@@ -172,14 +173,20 @@ export function intakeFormToUserResponses(formData: IntakeFormData, schema: Inta
   });
 }
 
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_FILES = 10;
+const ACCEPT_EXTENSIONS = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.tif';
+
 interface IntakeFormProps {
-  onSubmit: (userResponses: string[]) => void;
+  onSubmit: (userResponses: string[], files?: FileEntry[]) => void;
 }
 
 const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
   const [formData, setFormData] = useState<IntakeFormData>({});
   const [activeSection, setActiveSection] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<{ file: File; base64: string; mimeType: string }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const lang = useUIStore((s) => s.lang);
   const t = translations[lang];
   const isEn = lang === Language.EN;
@@ -220,9 +227,40 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
 
   const currentSection = intakeSchema.sections[activeSection];
 
+  const handleFilesSelected = async (fileList: FileList | null) => {
+    if (!fileList) return;
+    const newFiles = Array.from(fileList);
+    const remaining = MAX_FILES - pendingFiles.length;
+    const filesToAdd = newFiles.slice(0, remaining);
+
+    for (const file of filesToAdd) {
+      if (!SUPPORTED_DOC_MIME_TYPES.includes(file.type)) continue;
+      if (file.size > MAX_FILE_SIZE) continue;
+      if (pendingFiles.some(pf => pf.file.name === file.name)) continue;
+
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      setPendingFiles(prev => [...prev, { file, base64, mimeType: file.type }]);
+    }
+  };
+
+  const removeFile = (idx: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = () => {
     const responses = intakeFormToUserResponses(formData, intakeSchema, lang);
-    onSubmit(responses);
+    const files: FileEntry[] | undefined = pendingFiles.length > 0
+      ? pendingFiles.map(pf => ({ base64: pf.base64, mimeType: pf.mimeType, fileName: pf.file.name }))
+      : undefined;
+    onSubmit(responses, files);
   };
 
   if (showPreview) {
@@ -301,6 +339,49 @@ const IntakeForm: React.FC<IntakeFormProps> = ({ onSubmit }) => {
             lang={lang}
           />
         ))}
+      </div>
+
+      {/* File attachment section */}
+      <div className="flex-shrink-0 px-4 md:px-6 py-3 border-t border-slate-100 bg-slate-50/30">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <span className="text-xs font-bold text-slate-700">{t.formAttachFiles}</span>
+            <p className="text-[10px] text-slate-400 mt-0.5">{t.formAttachDesc}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={pendingFiles.length >= MAX_FILES}
+            className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-blue-600 border border-blue-200 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+          >
+            + {t.supportedFormats}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPT_EXTENSIONS}
+            multiple
+            className="hidden"
+            onChange={(e) => handleFilesSelected(e.target.files)}
+          />
+        </div>
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {pendingFiles.map((pf, idx) => (
+              <div key={pf.file.name} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs">
+                <span>{pf.mimeType.startsWith('image/') ? '\u{1F5BC}\uFE0F' : '\u{1F4C4}'}</span>
+                <span className="text-slate-700 font-medium max-w-[120px] truncate">{pf.file.name}</span>
+                <span className="text-slate-400 text-[10px]">{(pf.file.size / 1024).toFixed(0)}KB</span>
+                <button
+                  onClick={() => removeFile(idx)}
+                  className="text-slate-400 hover:text-red-500 ml-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Footer actions */}

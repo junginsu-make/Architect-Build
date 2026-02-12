@@ -8,12 +8,14 @@ import { translations } from './translations';
 import { useChat } from './hooks/useChat.tsx';
 import { useUIStore } from './store/uiStore';
 import { useDeliverableStore } from './store/deliverableStore';
-import { translateBlueprint } from './services/geminiService';
+import { translateBlueprint, analyzeMultipleDocuments } from './services/geminiService';
+import type { FileEntry } from './services/geminiService';
+import { useChatStore } from './store/chatStore';
 
 const App: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const { messages, isLoading, chatPhase, handleSendMessage, handleUploadDocument, handleUploadAudio, triggerBlueprint } = useChat();
+  const { messages, isLoading, chatPhase, handleSendMessage, handleUploadDocuments, handleUploadText, handleUploadAudio, triggerBlueprint } = useChat();
   const { lang, showGuide, intakeMode, activePanel, toggleGuide, setIntakeMode, toggleLang, setActivePanel } = useUIStore();
   const blueprint = useDeliverableStore((s) => s.blueprint);
   const blueprintLang = useDeliverableStore((s) => s.blueprintLang);
@@ -58,8 +60,31 @@ const App: React.FC = () => {
 
   const activeBlueprint = translatedBlueprints[lang] ?? blueprint;
 
-  const handleIntakeSubmit = (userResponses: string[]) => {
+  const addAdditionalContext = useChatStore((s) => s.addAdditionalContext);
+
+  const handleIntakeSubmit = async (userResponses: string[], files?: FileEntry[]) => {
     setIntakeMode('chat');
+
+    // If files were attached, analyze them first and add to context
+    if (files && files.length > 0) {
+      try {
+        const analysis = await analyzeMultipleDocuments(files, lang);
+        const contextText = [
+          `[문서 분석: ${analysis.title}]`,
+          `요약: ${analysis.overview}`,
+          `배경: ${analysis.designKeywords.background}`,
+          `모델: ${analysis.designKeywords.model}`,
+          `프로세스: ${analysis.designKeywords.process}`,
+          `기술: ${analysis.designKeywords.tech}`,
+          `목표: ${analysis.designKeywords.goal}`,
+          `핵심 발견: ${analysis.keyFindings.join('; ')}`,
+        ].join('\n');
+        addAdditionalContext(contextText);
+      } catch (err) {
+        console.error('Form file analysis failed:', err);
+      }
+    }
+
     triggerBlueprint(userResponses);
   };
 
@@ -147,7 +172,8 @@ const App: React.FC = () => {
             </main>
             <MessageInput
               onSendMessage={handleSendMessage}
-              onUploadDocument={handleUploadDocument}
+              onUploadDocuments={handleUploadDocuments}
+              onUploadText={handleUploadText}
               onUploadAudio={handleUploadAudio}
               isLoading={isLoading}
               onRestart={() => window.location.reload()}

@@ -61,7 +61,7 @@ Stores are independent (no cross-store dependencies). Access via `useChatStore()
 |---|---|---|
 | `gemini-3-pro-preview` | Blueprint generation with Google Search grounding | `generateSolutionBlueprint` |
 | `gemini-3-flash-preview` | Follow-up questions, document analysis, free chat | `generateFollowUpQuestion`, `analyzeDocument`, `generateContinuingChat` |
-| `gemini-2.0-flash` | Audio/meeting minutes analysis | `analyzeAudio` |
+| `gemini-2.5-flash` | Audio/meeting minutes analysis, document/image vision analysis | `analyzeAudio`, `analyzeDocument` |
 | `gemini-2.5-flash-native-audio` | Live bidirectional translation | `liveTranslationService` |
 | `claude-sonnet-4-5-20250929` | Implementation plan (PRD/LLD/code) | `generateImplementationPlan` |
 

@@ -9,11 +9,13 @@ import {
   generateFollowUpQuestion,
   generateGapFillingQuestion,
   analyzeDocument,
+  analyzeMultipleDocuments,
   analyzeAudio,
   generateContinuingChat,
   type EnterpriseQuestionType,
   type MeetingMinutes,
   type DocumentAnalysis,
+  type FileEntry,
 } from '../services/geminiService';
 import { generateImplementationPlan, hasClaudeApiKey } from '../services/claudeService';
 
@@ -732,14 +734,27 @@ export function useChat() {
   // ── Document upload ──
   const lastDocRef = useRef<DocumentAnalysis | null>(null);
 
-  const handleUploadDocument = useCallback(
-    async (data: string, type: 'pdf' | 'text', name?: string) => {
+  const handleUploadDocuments = useCallback(
+    async (files: FileEntry[]) => {
       const s = stateRef.current;
-      addMessage(<T render={(t) => <>{t.attachedFile + ' ' + (name || t.document)}</>} />, Sender.USER);
+      const fileNames = files.map(f => f.fileName).join(', ');
+      addMessage(<T render={(t) => <>{t.attachedFiles + ' ' + fileNames}</>} />, Sender.USER);
       setLoading(true);
       try {
-        const mimeType = type === 'pdf' ? 'application/pdf' : 'text/plain';
-        const doc = await analyzeDocument(data, mimeType, s.lang);
+        // Show progress message
+        if (files.length > 1) {
+          addMessage(
+            <T render={(t) =>
+              <div className="flex items-center gap-2 text-blue-600 text-xs font-semibold">
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce"></div>
+                {t.analyzingFileProgress} {files.length} {files.length > 1 ? t.multiFileAnalysisComplete.split('—')[0].trim() : ''}...
+              </div>
+            } />,
+            Sender.BOT,
+          );
+        }
+
+        const doc = await analyzeMultipleDocuments(files, s.lang);
         lastDocRef.current = doc;
 
         // Structured document analysis display
@@ -858,6 +873,86 @@ export function useChat() {
         addAdditionalContext(contextText);
 
         // Guide message
+        addMessage(
+          <T render={(t) =>
+            <div className="space-y-2">
+              <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-700 border border-blue-100 leading-relaxed" dangerouslySetInnerHTML={{__html: t.docReflectedGuide}} />
+            </div>
+          } />,
+          Sender.BOT,
+        );
+      } catch {
+        addMessage(<T render={(t) => t.docAnalysisFailed} />, Sender.BOT);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [addMessage, setLoading, addAdditionalContext],
+  );
+
+  const handleUploadText = useCallback(
+    async (text: string, name: string) => {
+      const s = stateRef.current;
+      addMessage(<T render={(t) => <>{t.attachedFile + ' ' + name}</>} />, Sender.USER);
+      setLoading(true);
+      try {
+        const base64 = btoa(unescape(encodeURIComponent(text)));
+        const doc = await analyzeDocument(base64, 'text/plain', s.lang);
+        lastDocRef.current = doc;
+
+        // Reuse the same structured display (delegated below via shared rendering)
+        addMessage(
+          <T render={(t) =>
+            <div className="space-y-0">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+                <div className="bg-slate-900 px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold text-green-400 uppercase tracking-widest mb-1">DOCUMENT ANALYSIS</p>
+                      <h4 className="text-base font-bold text-white">{doc.title}</h4>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-green-600/20 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-green-400">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6 space-y-5">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.docSummary}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed">{doc.overview}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.keyFindings}</p>
+                    <div className="space-y-1">
+                      {doc.keyFindings.map((finding: string, i: number) => (
+                        <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <span className="text-green-500 mt-0.5 flex-shrink-0">&#10003;</span>
+                          <span>{finding}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          } />,
+          Sender.BOT,
+        );
+
+        const contextText = [
+          `[문서 분석: ${doc.title}]`,
+          `요약: ${doc.overview}`,
+          `배경: ${doc.designKeywords.background}`,
+          `모델: ${doc.designKeywords.model}`,
+          `프로세스: ${doc.designKeywords.process}`,
+          `기술: ${doc.designKeywords.tech}`,
+          `목표: ${doc.designKeywords.goal}`,
+          `핵심 발견: ${doc.keyFindings.join('; ')}`,
+        ].join('\n');
+        addAdditionalContext(contextText);
+
         addMessage(
           <T render={(t) =>
             <div className="space-y-2">
@@ -1035,7 +1130,8 @@ export function useChat() {
     isLoading,
     chatPhase,
     handleSendMessage,
-    handleUploadDocument,
+    handleUploadDocuments,
+    handleUploadText,
     handleUploadAudio,
     triggerBlueprint,
   };

@@ -4,17 +4,19 @@ import DocumentModal from './DocumentModal';
 import VoiceRecorderModal from './VoiceRecorderModal';
 import { Language } from '../types';
 import { translations } from '../translations';
+import type { FileEntry } from '../services/geminiService';
 
 interface MessageInputProps {
   onSendMessage: (text: string) => void;
-  onUploadDocument: (data: string, type: 'pdf' | 'text', name?: string) => void;
+  onUploadDocuments: (files: FileEntry[]) => void;
+  onUploadText: (data: string, name: string) => void;
   onUploadAudio: (data: string, mimeType: string) => void;
   isLoading: boolean;
   onRestart: () => void;
   lang: Language;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, onUploadDocument, onUploadAudio, isLoading, onRestart, lang }) => {
+const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, onUploadDocuments, onUploadText, onUploadAudio, isLoading, onRestart, lang }) => {
   const [text, setText] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
@@ -123,7 +125,8 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage, onUploadDocu
       <DocumentModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onUpload={onUploadDocument}
+        onUploadMultiple={onUploadDocuments}
+        onUploadText={onUploadText}
         lang={lang}
       />
       <VoiceRecorderModal
