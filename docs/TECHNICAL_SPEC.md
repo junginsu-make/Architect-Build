@@ -23,8 +23,10 @@
 |:---|:---|:---|
 | **설계 및 검색** | `gemini-3-pro-preview` | `googleSearch` 도구 활성화, JSON 스키마 응답, Grounding Metadata 추출 |
 | **후속 질문 생성** | `gemini-3-flash-preview` | JSON 스키마 응답 (`responseMimeType: 'application/json'`) |
-| **문서 분석** | `gemini-3-flash-preview` | 멀티파트 입력 (PDF: inlineData / 텍스트: text part 직접 전송), `DocumentAnalysis` JSON 반환 |
-| **음성 분석** | `gemini-2.0-flash` | 네이티브 오디오 `inlineData`, `MeetingMinutes` JSON 반환 |
+| **문서/이미지 분석** | `gemini-2.5-flash` | Vision API (PDF/이미지 inlineData), 텍스트: text part 직접 전송, `DocumentAnalysis` JSON 반환, maxOutputTokens: 65536 |
+| **대용량 문서 (>5MB)** | `gemini-2.5-flash` (2단계) | Stage 1: 원시 데이터 추출 → Stage 2: 구조화 JSON 분석 (`analyzeDocumentSmart`) |
+| **다중 파일 병합 (4+)** | `gemini-2.5-flash` | AI 기반 통합 병합 (`mergeDocumentAnalysesWithAI`), 실패 시 단순 병합 폴백 |
+| **음성 분석** | `gemini-2.5-flash` | 네이티브 오디오 `inlineData`, `MeetingMinutes` JSON 반환, maxOutputTokens: 65536 |
 | **자유 채팅** | `gemini-3-flash-preview` | 맥락 유지 단일 호출 |
 | **실시간 통역** | `gemini-2.5-flash-native-audio` | Live API 세션, PCM 16kHz → 24kHz 스트리밍 |
 | **구현 설계** | `claude-sonnet-4-5-20250929` | PRD, LLD, 스프린트 계획, API/DB/코드 모듈 생성 (`ImplementationPlan` JSON) |
@@ -93,12 +95,12 @@ Architect-Build/
 │   ├── ChatBubble.tsx                   # 채팅 버블 (마크다운 볼드/이탤릭 지원)
 │   ├── BotAvatar.tsx                    # AI 아바타
 │   ├── MessageInput.tsx                 # 입력창 + 문서/음성 버튼
-│   ├── DocumentModal.tsx                # PDF/텍스트 업로드 모달 (20MB 제한, 에러 처리)
+│   ├── DocumentModal.tsx                # 다중 파일 업로드 모달 (PDF/이미지 10개, 20MB/파일, Vision 분석)
 │   ├── VoiceRecorderModal.tsx           # 음성 녹음 모달 (5초~30분, 자동 정지)
 │   ├── ResultPanel.tsx                  # 설계 결과 패널 (클라이언트 뷰 + 개발자 4탭)
 │   ├── TranslationHub.tsx              # 실시간 통역 UI
 │   ├── intake/
-│   │   ├── IntakeForm.tsx               # 구조화된 양식 UI (완료율, P1 하이라이트)
+│   │   ├── IntakeForm.tsx               # 구조화된 양식 UI (완료율, P1 하이라이트, 파일 첨부)
 │   │   ├── IntakeFormPreview.tsx         # 인쇄/이메일용 A4 프리뷰
 │   │   └── IntakeFieldRenderer.tsx      # 필드 타입별 렌더러
 │   └── output/
@@ -134,11 +136,22 @@ Architect-Build/
 ### 4.2 멀티모달 입력 흐름
 
 ```
-[문서 업로드 (PDF/텍스트)]
-    ↓ analyzeDocument() → DocumentAnalysis JSON
+[다중 파일 업로드 (PDF/이미지, 최대 10개)]
+    ↓ analyzeMultipleDocuments(files) → 각 파일 병렬 분석
+    ↓   ├── 작은 파일: analyzeDocument() (단일 단계)
+    ↓   └── 대용량 PDF (>5MB): analyzeDocumentSmart() (2단계: 추출 → 구조화)
+    ↓ 파일 2-3개: mergeDocumentAnalysesSimple() (단순 병합)
+    ↓ 파일 4+개: mergeDocumentAnalysesWithAI() (AI 기반 통합 병합)
+    ↓ → DocumentAnalysis JSON
     ↓ 구조화 표시 (5대 영역, 핵심 발견, 데이터 갭, 설계 키워드)
     ↓ chatStore.addAdditionalContext (구조화된 텍스트)
     ↓ "문서 기반으로 설계 시작" → designKeywords 자동 매핑 → Phase 7
+
+[양식(Form) 탭 파일 첨부]
+    ↓ IntakeForm에서 파일 선택 (최대 10개)
+    ↓ onSubmit(responses, files) → App.tsx
+    ↓ analyzeMultipleDocuments(files) → additionalContext에 추가
+    ↓ triggerBlueprint(responses) → Phase 6 → Phase 7
 
 [음성 녹음]
     ↓ analyzeAudio() → MeetingMinutes JSON
@@ -159,6 +172,8 @@ Architect-Build/
 ```typescript
 // geminiService.ts — Gemini 서비스
 analyzeDocument(data: string, mimeType: string, lang?: Language): Promise<DocumentAnalysis>
+analyzeDocumentSmart(data: string, mimeType: string, lang?: Language, onStage?: (stage) => void): Promise<DocumentAnalysis>  // 대용량 2단계 분석
+analyzeMultipleDocuments(files: FileEntry[], lang?: Language, onProgress?: Function): Promise<DocumentAnalysis>  // 다중 파일 병렬 분석 + 병합
 analyzeAudio(base64Data: string, mimeType: string, lang?: Language): Promise<MeetingMinutes>
 generateFollowUpQuestion(questionType: EnterpriseQuestionType, userResponses: string[], lang: Language, additionalContext?: string[]): Promise<FollowUpQuestion>
 generateSolutionBlueprint(userResponses: string[], lang: Language, additionalContext?: string[]): Promise<SolutionBlueprint>

@@ -57,19 +57,21 @@ Stores are independent (no cross-store dependencies). Access via `useChatStore()
 
 ### AI Model Usage
 
-| Model | Purpose | Service Function |
-|---|---|---|
-| `gemini-3-pro-preview` | Blueprint generation with Google Search grounding | `generateSolutionBlueprint` |
-| `gemini-3-flash-preview` | Follow-up questions, document analysis, free chat | `generateFollowUpQuestion`, `analyzeDocument`, `generateContinuingChat` |
-| `gemini-2.5-flash` | Audio/meeting minutes analysis, document/image vision analysis | `analyzeAudio`, `analyzeDocument` |
-| `gemini-2.5-flash-native-audio` | Live bidirectional translation | `liveTranslationService` |
-| `claude-sonnet-4-5-20250929` | Implementation plan (PRD/LLD/code) | `generateImplementationPlan` |
+| Model | Purpose | maxOutputTokens | Service Function |
+|---|---|---|---|
+| `gemini-3-pro-preview` | Blueprint generation with Google Search grounding | 65536 (A,C) / 32768 (B) | `generateSolutionBlueprint` |
+| `gemini-3-flash-preview` | Follow-up questions, free chat, translation | 8192 (Q&A) / 65536 (translation) | `generateFollowUpQuestion`, `generateContinuingChat`, `translateBlueprint` |
+| `gemini-2.5-flash` | Document/image vision analysis, audio analysis, AI merge | 65536 | `analyzeDocument`, `analyzeDocumentSmart`, `analyzeAudio`, `mergeDocumentAnalysesWithAI` |
+| `gemini-2.5-flash-native-audio` | Live bidirectional translation | — | `liveTranslationService` |
+| `claude-sonnet-4-5-20250929` | Implementation plan (PRD/LLD/code) | — | `generateImplementationPlan` |
 
 ### Key Patterns
 
 **stateRef pattern in useChat**: A `useRef` syncs with current state each render so `deps=[]` callbacks always access latest values without re-subscribing.
 
-**Gemini JSON responses**: Several Gemini calls use `responseMimeType: 'application/json'` with `responseSchema` for structured output.
+**Gemini JSON responses**: Several Gemini calls use `responseMimeType: 'application/json'` with `responseSchema` for structured output. All 11 Gemini calls have explicit `maxOutputTokens` set.
+
+**Multi-file document pipeline**: `DocumentModal` supports up to 10 files (PDF/images). Large PDFs (>5MB) use two-stage analysis: raw extraction → structured JSON. 4+ file results are merged via AI-powered consolidation (`mergeDocumentAnalysesWithAI`). `IntakeForm` also supports file attachment with the same pipeline.
 
 **Mermaid diagrams**: Rendered client-side via CDN (`cdn.jsdelivr.net`). Security: `securityLevel: 'strict'` + `textContent` (never `innerHTML`). Three diagram types: system architecture, sequence, tech-stack.
 

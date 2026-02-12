@@ -29,8 +29,10 @@
 | **비즈니스 분석** | Gemini 3 Pro | 로드맵, 다이어그램, 보안 전략, 클라이언트 제안서 |
 | **구현 설계** | Claude Sonnet 4.5 | PRD, LLD, 스프린트 계획, API 설계, DB 스키마, 핵심 코드 모듈 |
 | **후속 질문** | Gemini 3 Flash | 맥락 기반 질문 + 예시 + 팁 |
-| **문서 분석** | Gemini 3 Flash | 구조화된 문서 분석 (JSON) |
-| **음성 분석** | Gemini 2.0 Flash | 구조화된 회의록 (JSON) |
+| **문서/이미지 분석** | Gemini 2.5 Flash (Vision) | 구조화된 문서 분석 (JSON), 이미지 내 텍스트/수치 추출 |
+| **대용량 문서 처리** | Gemini 2.5 Flash (2단계) | Stage 1 원시 추출 → Stage 2 구조화 (>5MB PDF) |
+| **다중 파일 병합** | Gemini 2.5 Flash | AI 기반 통합 병합 (4개+ 파일) |
+| **음성 분석** | Gemini 2.5 Flash | 구조화된 회의록 (JSON) |
 | **자유 채팅** | Gemini 3 Flash | 설계 후 후속 상담 |
 | **실시간 통역** | Gemini 2.5 Flash Native Audio | Live API 한국어 ↔ 영어 |
 
@@ -60,13 +62,20 @@ Claude API 키가 없으면 Gemini 단독으로 동작합니다 (graceful fallba
 | 입력 방식 | 분석 모델 | 결과 형식 |
 |:---|:---|:---|
 | **텍스트 입력** | — | 직접 userResponses에 저장 |
-| **PDF 업로드** (최대 20MB) | `gemini-3-flash-preview` | `DocumentAnalysis` JSON |
-| **장문 텍스트 붙여넣기** | `gemini-3-flash-preview` | `DocumentAnalysis` JSON (text part 직접 전송) |
-| **음성 녹음** (5초~30분) | `gemini-2.0-flash` | `MeetingMinutes` JSON |
+| **다중 파일 업로드** (최대 10개, 20MB/파일) | `gemini-2.5-flash` (Vision) | `DocumentAnalysis` JSON |
+| **지원 파일 형식** | PDF, JPG, PNG, GIF, WebP, BMP, TIFF | 이미지 내 텍스트/수치/표 데이터 추출 |
+| **대용량 PDF** (>5MB) | `gemini-2.5-flash` (2단계) | Stage 1 원시 추출 → Stage 2 구조화 |
+| **장문 텍스트 붙여넣기** | `gemini-2.5-flash` | `DocumentAnalysis` JSON (text part 직접 전송) |
+| **음성 녹음** (5초~30분) | `gemini-2.5-flash` | `MeetingMinutes` JSON |
+| **양식(Form) 파일 첨부** | `gemini-2.5-flash` | 양식 제출 시 파일 분석 → additionalContext |
 
 모든 분석 결과는 구조화된 JSON으로 반환됩니다:
 - **DocumentAnalysis**: 문서 요약, 5대 핵심 영역, 핵심 발견 사항, 데이터 갭, 설계 키워드
 - **MeetingMinutes**: 회의 제목, 요약, 주요 논의 사항, 요구사항, 후속 조치, 설계 키워드
+
+다중 파일 병합 전략:
+- **2-3개 파일**: 단순 병합 (필드별 `|` 연결, 배열 중복 제거)
+- **4개+ 파일**: AI 기반 통합 병합 (Gemini가 중복 제거, 우선순위 정렬, 지능적 통합)
 
 사용자가 "문서 기반으로 설계 시작" 또는 "회의록 기반으로 설계 시작"을 입력하면 분석된 designKeywords를 자동 매핑하여 즉시 블루프린트를 생성합니다.
 

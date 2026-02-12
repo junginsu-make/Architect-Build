@@ -1,7 +1,7 @@
 # Build Agent 시스템 - 종합 설계 보고서
 
 > Architect Enterprise Builder의 멀티모델 AI 에이전트 시스템 현황 및 설계 방향
-> 최종 업데이트: 2026-02-11
+> 최종 업데이트: 2026-02-12
 
 ---
 
@@ -77,10 +77,11 @@ Phase 7 Blueprint 생성:
 | 입력 방식 | 분석 모델 | 결과 형식 |
 |:---|:---|:---|
 | **채팅 (5단계 진단)** | Gemini Flash (후속 질문) | userResponses[] |
-| **구조화 양식 (IntakeForm)** | — | userResponses[] 직접 매핑 |
-| **PDF 업로드** (최대 20MB) | Gemini Flash | `DocumentAnalysis` JSON |
-| **장문 텍스트 붙여넣기** | Gemini Flash | `DocumentAnalysis` JSON |
-| **음성 녹음** (5초~30분) | Gemini 2.0 Flash | `MeetingMinutes` JSON |
+| **구조화 양식 (IntakeForm)** | — (파일 첨부 시 Gemini 2.5 Flash) | userResponses[] + additionalContext |
+| **다중 파일 업로드** (최대 10개, 20MB/파일) | Gemini 2.5 Flash (Vision) | `DocumentAnalysis` JSON |
+| **지원 포맷** | PDF, JPG, PNG, GIF, WebP, BMP, TIFF | 이미지 내 텍스트/표/수치 추출 |
+| **장문 텍스트 붙여넣기** | Gemini 2.5 Flash | `DocumentAnalysis` JSON |
+| **음성 녹음** (5초~30분) | Gemini 2.5 Flash | `MeetingMinutes` JSON |
 
 ### 3.2 문서/회의록 → 블루프린트 자동 변환
 
@@ -240,6 +241,13 @@ Layer 4 (병렬): client-brief | code-scaffold | executive-summary
 - [x] 보안 강화: Gemini `systemInstruction` 분리 (프롬프트 인젝션 방어)
 - [x] 보안 강화: Phase 6 승인 정확 매칭 (`^...$` 앵커)
 - [x] 로고 생성 기능 제거 (Gemini Flash Image 호출 삭제, 전 소스/문서 정리)
+- [x] 다중 파일 업로드 (최대 10개, PDF/이미지 7종 지원)
+- [x] 이미지 비전 분석 (Gemini 2.5 Flash Vision — 슬라이드/발표자료 텍스트/수치 추출)
+- [x] 대용량 PDF 2단계 분석 (>5MB: 원시 추출 → 구조화 JSON)
+- [x] AI 기반 분석 병합 (4+ 파일 결과 지능적 통합)
+- [x] 양식(Form) 탭 파일 첨부 기능
+- [x] 전체 11개 Gemini API 호출 maxOutputTokens 명시적 설정
+- [x] 오디오/문서 분석 모델 gemini-2.0-flash → gemini-2.5-flash 업그레이드
 
 ### Phase B: 에이전트 마이그레이션 (예정)
 - [ ] geminiService.ts → Sub Agent 분리
@@ -271,7 +279,9 @@ Layer 4 (병렬): client-brief | code-scaffold | executive-summary
 | Claude API 미설정 | Graceful fallback (Gemini 단독 동작) |
 | IndexedDB 데이터 손실 | JSON 내보내기 + ZIP 다운로드 |
 | 가상 수치 신뢰성 문제 | 프롬프트에 가상 수치 금지 규칙 적용 |
-| 대용량 PDF/음성 처리 | PDF 20MB 제한, 음성 30분 제한 |
+| 대용량 PDF/음성 처리 | PDF 20MB/파일 제한, 음성 30분 제한, >5MB PDF는 2단계 분석 |
+| 다중 파일 병합 품질 | 4+ 파일은 AI 기반 통합 병합, 실패 시 단순 병합 폴백 |
+| 출력 토큰 잘림 | 전체 11개 Gemini 호출에 maxOutputTokens 명시적 설정 (8192~65536) |
 | Preview 모델 변경 | GA 모델 출시 시 전환 |
 | API 키 클라이언트 노출 | Phase C에서 프록시 서버 도입 예정 |
 | 프롬프트 인젝션 | systemInstruction 분리로 사용자 데이터 격리 |
