@@ -178,10 +178,60 @@ JSON만 출력하세요. 마크다운 코드 블록이나 추가 설명 없이 �
     }
   }
 
+  return parseClaudeResponse(text);
+};
+
+function parseClaudeResponse(text: string): ImplementationPlan {
+  // Step 1: Strip markdown code fences
+  let cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+  // Step 2: Extract JSON object if surrounded by other text
+  const jsonStart = cleaned.indexOf('{');
+  const jsonEnd = cleaned.lastIndexOf('}');
+  if (jsonStart !== -1 && jsonEnd > jsonStart) {
+    cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
+  }
+
+  // Step 3: Try direct parse
   try {
-    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(cleaned) as ImplementationPlan;
-  } catch {
+  } catch (e1) {
+    console.warn('[Claude] Direct JSON parse failed, attempting recovery...', (e1 as Error).message);
+  }
+
+  // Step 4: Fix common JSON issues — truncated strings, trailing commas
+  try {
+    let fixed = cleaned;
+    // Remove trailing commas before } or ]
+    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+    // Try to close unclosed strings/arrays/objects (truncated response)
+    const openBraces = (fixed.match(/{/g) || []).length;
+    const closeBraces = (fixed.match(/}/g) || []).length;
+    const openBrackets = (fixed.match(/\[/g) || []).length;
+    const closeBrackets = (fixed.match(/]/g) || []).length;
+
+    // If truncated, try to close the JSON
+    if (openBraces > closeBraces || openBrackets > closeBrackets) {
+      // Check if we're inside an unclosed string
+      const lastQuote = fixed.lastIndexOf('"');
+      const afterLastQuote = fixed.slice(lastQuote + 1).trim();
+      if (afterLastQuote === '' || afterLastQuote.endsWith(',') || afterLastQuote.endsWith(':')) {
+        // Truncated inside a string value — close it
+        fixed = fixed.slice(0, lastQuote + 1);
+        if (afterLastQuote.endsWith(':')) {
+          fixed += '""';
+        }
+      }
+      // Remove any trailing comma
+      fixed = fixed.replace(/,\s*$/, '');
+      // Close remaining brackets/braces
+      for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += ']';
+      for (let i = 0; i < openBraces - closeBraces; i++) fixed += '}';
+    }
+    return JSON.parse(fixed) as ImplementationPlan;
+  } catch (e2) {
+    console.error('[Claude] JSON recovery failed:', (e2 as Error).message);
+    console.error('[Claude] Response length:', text.length, 'First 500 chars:', text.slice(0, 500));
     throw new Error('Claude 응답을 파싱할 수 없습니다.');
   }
-};
+}

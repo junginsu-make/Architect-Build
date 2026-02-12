@@ -212,23 +212,36 @@ const Mermaid: React.FC<{
       setIsRendering(true);
       setError(false);
       ref.current.removeAttribute('data-processed');
-      // Normalize: convert literal \n to actual newlines for Mermaid parsing
       const normalized = chart.replace(/\\n/g, '\n').replace(/\\t/g, '  ');
       ref.current.textContent = normalized;
-      const renderDiagram = async (retries = 3) => {
-        try {
-          // Wait for Mermaid CDN to load if not yet available
-          for (let i = 0; i < retries && !(window as any).mermaid; i++) {
-            await new Promise(r => setTimeout(r, 500));
-          }
-          if ((window as any).mermaid) {
-            await new Promise(r => setTimeout(r, 200));
+      const renderDiagram = async () => {
+        // Wait for Mermaid CDN
+        for (let i = 0; i < 5 && !(window as any).mermaid; i++) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+        if (!(window as any).mermaid) { setError(true); setIsRendering(false); return; }
+
+        // Retry up to 3 times with increasing delay (handles concurrent render conflicts)
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            if (!ref.current) break;
+            ref.current.removeAttribute('data-processed');
+            ref.current.textContent = normalized;
+            await new Promise(r => setTimeout(r, 300 + attempt * 500));
             await (window as any).mermaid.run({ nodes: [ref.current] });
+            // Auto-fit: remove hardcoded dimensions from rendered SVG
+            const svg = ref.current?.querySelector('svg');
+            if (svg) {
+              svg.removeAttribute('height');
+              svg.style.maxWidth = '100%';
+              svg.style.height = 'auto';
+            }
+            setIsRendering(false);
+            return;
+          } catch (err) {
+            console.warn(`[Mermaid] Render attempt ${attempt + 1} failed:`, err);
+            if (attempt === 2) { setError(true); setIsRendering(false); }
           }
-          setIsRendering(false);
-        } catch {
-          setError(true);
-          setIsRendering(false);
         }
       };
       renderDiagram();
@@ -254,7 +267,7 @@ const Mermaid: React.FC<{
           </div>
         </div>
       )}
-      <div className="relative min-h-[150px] md:min-h-[200px] flex items-center justify-center bg-white rounded-xl border border-slate-200 overflow-x-auto overflow-y-hidden cursor-pointer" onClick={onExpand}>
+      <div className="relative min-h-[150px] md:min-h-[200px] flex items-center justify-center bg-white rounded-xl border border-slate-200 overflow-auto cursor-pointer" onClick={onExpand}>
         {isRendering && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/90">
             <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div>
@@ -292,8 +305,18 @@ const DiagramModal: React.FC<{ chart: string; title: string; onClose: () => void
       const normalized = chart.replace(/\\n/g, '\n').replace(/\\t/g, '  ');
       ref.current.textContent = normalized;
       const render = async () => {
-        try { if ((window as any).mermaid) { await new Promise(r => setTimeout(r, 100)); await (window as any).mermaid.run({ nodes: [ref.current] }); } }
-        catch { if (ref.current) ref.current.textContent = normalized; }
+        try {
+          if ((window as any).mermaid) {
+            await new Promise(r => setTimeout(r, 200));
+            await (window as any).mermaid.run({ nodes: [ref.current] });
+            const svg = ref.current?.querySelector('svg');
+            if (svg) {
+              svg.removeAttribute('height');
+              svg.style.maxWidth = '100%';
+              svg.style.height = 'auto';
+            }
+          }
+        } catch { if (ref.current) ref.current.textContent = normalized; }
       };
       render();
     }
@@ -301,8 +324,8 @@ const DiagramModal: React.FC<{ chart: string; title: string; onClose: () => void
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-[98vw] md:w-[90vw] h-[90vh] md:h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div className="bg-white rounded-2xl shadow-2xl w-[98vw] md:w-[90vw] max-h-[90vh] md:max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h3 className="text-sm font-bold text-slate-900">{title}</h3>
           <div className="flex gap-2">
             <button onClick={() => { const b = new Blob([chart], { type: 'text/plain' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `${title.replace(/\s+/g, '-')}.mmd`; a.click(); URL.revokeObjectURL(u); }} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50">{t.mmdDownload}</button>
@@ -311,7 +334,7 @@ const DiagramModal: React.FC<{ chart: string; title: string; onClose: () => void
             </button>
           </div>
         </div>
-        <div className="flex-grow overflow-auto flex items-center justify-center p-6">
+        <div className="flex-grow overflow-auto p-6">
           <div className="mermaid w-full flex justify-center" ref={ref}>{chart}</div>
         </div>
       </div>
