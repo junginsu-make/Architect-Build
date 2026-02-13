@@ -17,7 +17,9 @@ import {
   type DocumentAnalysis,
   type FileEntry,
 } from '../services/geminiService';
-import { generateImplementationPlan, hasClaudeApiKey } from '../services/claudeService';
+import { generateImplementationPlan, type ImplementationPlanResult } from '../services/claudeService';
+import type { ModelProvider } from '../services/fallbackChain';
+import { generateFrontendDesignPlan } from '../services/frontendDesignService';
 
 const QUESTION_TYPES: EnterpriseQuestionType[] = [
   'SOLUTION_MODEL',
@@ -226,8 +228,6 @@ export function useChat() {
             break;
           }
           case 7: {
-            const usesClaude = hasClaudeApiKey();
-
             addMessage(
               <T render={(t) =>
                 <div className="space-y-2">
@@ -235,29 +235,18 @@ export function useChat() {
                     <span className="animate-pulse">●</span>
                     {t.geminiGenerating}
                   </div>
-                  {usesClaude && (
-                    <div className="flex items-center gap-2 text-xs text-purple-600 bg-purple-50 p-2 rounded-lg border border-purple-100">
-                      <span className="animate-pulse">●</span>
-                      {t.claudeGenerating}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 text-xs text-purple-600 bg-purple-50 p-2 rounded-lg border border-purple-100">
+                    <span className="animate-pulse">●</span>
+                    {t.implGenerating}
+                  </div>
                 </div>
               } />,
               Sender.BOT,
             );
 
-            // Gemini: 비즈니스 분석 + 다이어그램 + 로고 + 클라이언트 제안서
-            // Claude: PRD, LLD, 스프린트 계획, 구현 계획 (API key가 있을 때만)
             const timeline = timelineRef.current.response || undefined;
             const geminiPromise = generateSolutionBlueprint(responses, currentLang, context, timeline);
-            let claudeError: Error | null = null;
-            const claudePromise = usesClaude
-              ? generateImplementationPlan(responses, currentLang, context, timeline).catch((err) => {
-                  console.warn('[Claude] 구현 계획 생성 실패, Gemini 결과만 사용:', err);
-                  claudeError = err instanceof Error ? err : new Error(String(err));
-                  return null;
-                })
-              : Promise.resolve(null);
+            const implPromise = generateImplementationPlan(responses, currentLang, context, timeline);
 
             // Await Gemini first — both promises already running in parallel
             const geminiResult = await geminiPromise;
@@ -269,76 +258,121 @@ export function useChat() {
             // Show Gemini results immediately in the result panel
             setBlueprint({ ...geminiResult }, currentLang);
 
-            if (usesClaude) {
-              // Gemini done — show progress, Claude still working
-              addMessage(
-                <T render={(t) =>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 p-2 rounded-lg border border-green-100">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                      </svg>
-                      {t.geminiCompleteProgress}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-purple-600 bg-purple-50 p-2 rounded-lg border border-purple-100">
-                      <span className="animate-pulse">●</span>
-                      {t.claudeStillWorking}
-                    </div>
+            // Start frontend design generation (depends on Gemini completion)
+            let frontendDesignError: Error | null = null;
+            const frontendDesignPromise = generateFrontendDesignPlan(
+              responses, currentLang, context,
+            ).catch((err) => {
+              console.warn('[FrontendDesign] 프론트엔드 디자인 생성 실패:', err);
+              frontendDesignError = err instanceof Error ? err : new Error(String(err));
+              return null;
+            });
+
+            // Gemini done — show progress, implementation + frontend design still working
+            addMessage(
+              <T render={(t) =>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 p-2 rounded-lg border border-green-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                    {t.geminiCompleteProgress}
                   </div>
-                } />,
-                Sender.BOT,
-              );
+                  <div className="flex items-center gap-2 text-xs text-purple-600 bg-purple-50 p-2 rounded-lg border border-purple-100">
+                    <span className="animate-pulse">●</span>
+                    {t.claudeStillWorking}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-teal-600 bg-teal-50 p-2 rounded-lg border border-teal-100">
+                    <span className="animate-pulse">●</span>
+                    {t.frontendDesignGenerating}
+                  </div>
+                </div>
+              } />,
+              Sender.BOT,
+            );
 
-              // Wait for Claude (may already be done)
-              const claudeResult = await claudePromise;
-              if (claudeResult) {
-                setBlueprint({ ...geminiResult, implementationPlan: claudeResult }, currentLang);
-              }
+            // Wait for both implementation plan and frontend design in parallel
+            const [implResult, frontendDesignResult] = await Promise.all([implPromise, frontendDesignPromise]);
 
-              // Completion message
-              addMessage(
-                <T render={(t) =>
+            // Merge results into blueprint
+            const mergedBlueprint: typeof geminiResult = { ...geminiResult };
+            const hasImplContent = implResult.plan.prd || implResult.plan.techStack.length > 0;
+            if (hasImplContent) {
+              mergedBlueprint.implementationPlan = implResult.plan;
+            }
+            if (frontendDesignResult) {
+              mergedBlueprint.frontendDesignPlan = frontendDesignResult;
+            }
+            setBlueprint(mergedBlueprint, currentLang);
+
+            // Helper to get model display classes (full strings for Tailwind JIT)
+            const modelClasses: Record<ModelProvider, string> = {
+              claude: 'text-purple-700 bg-purple-50 border-purple-100',
+              gemini: 'text-blue-700 bg-blue-50 border-blue-100',
+              gpt: 'text-green-700 bg-green-50 border-green-100',
+            };
+            const modelLabel = (p: ModelProvider, t: typeof currentT) =>
+              p === 'claude' ? t.implModelClaude : p === 'gemini' ? t.implModelGemini : t.implModelGPT;
+
+            // Completion message with model info
+            addMessage(
+              <T render={(t) => {
+                const clsA = modelClasses[implResult.modelUsed.callA];
+                const clsB = modelClasses[implResult.modelUsed.callB];
+                const allFailed = !hasImplContent;
+                return (
                   <div className="space-y-2">
                     <p className="font-bold text-green-800 text-xs">{t.complete}</p>
-                    {claudeResult && (
-                      <div className="flex items-center gap-2 text-xs text-purple-700 bg-purple-50 p-2 rounded-lg border border-purple-100">
+                    {!allFailed && (
+                      <>
+                        <div className={`flex items-center gap-2 text-xs p-2 rounded-lg border ${clsA}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                          </svg>
+                          {t.implCallALabel}: {modelLabel(implResult.modelUsed.callA, t)}
+                        </div>
+                        <div className={`flex items-center gap-2 text-xs p-2 rounded-lg border ${clsB}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                          </svg>
+                          {t.implCallBLabel}: {modelLabel(implResult.modelUsed.callB, t)}
+                        </div>
+                        {(implResult.modelUsed.callA !== 'claude' || implResult.modelUsed.callB !== 'claude') && (
+                          <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                            {t.implFallbackUsed}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {allFailed && (
+                      <div className="text-xs text-orange-700 bg-orange-50 p-2 rounded-lg border border-orange-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 inline mr-1">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                        </svg>
+                        {t.implAllFailed}
+                      </div>
+                    )}
+                    {frontendDesignResult && (
+                      <div className="flex items-center gap-2 text-xs text-teal-700 bg-teal-50 p-2 rounded-lg border border-teal-100">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                         </svg>
-                        {t.claudeSuccess}
+                        {t.frontendDesignComplete}
                       </div>
                     )}
-                    {!claudeResult && claudeError && (
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 p-2 rounded-lg border border-red-100">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                          </svg>
-                          {t.claudeFailed + ' '}{claudeError.message}
-                        </div>
-                        <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                          {t.claudeRetryGuide}
-                        </div>
+                    {!frontendDesignResult && frontendDesignError && (
+                      <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                        </svg>
+                        {t.frontendDesignFailed + ' '}{frontendDesignError.message}
                       </div>
                     )}
                   </div>
-                } />,
-                Sender.BOT,
-              );
-            } else {
-              // No Claude API key
-              addMessage(
-                <T render={(t) =>
-                  <div className="space-y-2">
-                    <p className="font-bold text-green-800 text-xs">{t.complete}</p>
-                    <div className="text-xs text-slate-400 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                      {t.claudeApiKeyGuide}
-                    </div>
-                  </div>
-                } />,
-                Sender.BOT,
-              );
-            }
+                );
+              }} />,
+              Sender.BOT,
+            );
 
             // Post-generation review prompt
             addMessage(
@@ -1003,17 +1037,58 @@ export function useChat() {
                 </div>
 
                 <div className="p-6 space-y-5">
+                  {/* Executive Summary */}
+                  <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-100">
+                    <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-2">{t.meetingExecSummary}</p>
+                    <p className="text-sm text-slate-800 leading-relaxed font-medium">{minutes.executiveSummary}</p>
+                  </div>
+
                   {/* Overview */}
                   <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.meetingOverview}</p>
                     <p className="text-sm text-slate-700 leading-relaxed">{minutes.overview}</p>
                   </div>
 
-                  {/* Key Topics */}
-                  <div>
+                  {/* Key Decisions */}
+                  {minutes.keyDecisions?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.meetingKeyDecisions}</p>
+                      <div className="space-y-2">
+                        {minutes.keyDecisions.map((d, i) => (
+                          <div key={i} className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                            <div className="flex items-start gap-2">
+                              <span className="text-emerald-500 mt-0.5 flex-shrink-0 font-bold">&#10003;</span>
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{d.decision}</p>
+                                <p className="text-xs text-slate-500 mt-1"><span className="font-semibold text-slate-600">{t.meetingDecisionRationale}:</span> {d.rationale}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Options Evaluation */}
+                  {minutes.optionsEvaluation?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.meetingOptionsEval}</p>
+                      <div className="space-y-2">
+                        {minutes.optionsEvaluation.map((opt, i) => (
+                          <div key={i} className="p-3 bg-violet-50 rounded-xl border border-violet-100">
+                            <span className="font-semibold text-sm text-violet-900">{opt.name}</span>
+                            <p className="text-xs text-slate-600 leading-relaxed mt-1">{opt.evaluation}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Key Topics (Strategic Discussion) */}
+                  {(minutes.keyTopics?.length ?? 0) > 0 && <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.meetingTopics}</p>
                     <div className="space-y-2">
-                      {minutes.keyTopics.map((topic, i) => (
+                      {minutes.keyTopics?.map((topic, i) => (
                         <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="w-5 h-5 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">{i + 1}</span>
@@ -1024,30 +1099,53 @@ export function useChat() {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </div>}
+
+                  {/* Detailed Feedback */}
+                  {minutes.detailedFeedback?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.meetingDetailedFeedback}</p>
+                      <div className="space-y-1">
+                        {minutes.detailedFeedback.map((fb, i) => (
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                            <span className="text-orange-400 mt-0.5 flex-shrink-0">&#9654;</span>
+                            <span>{fb}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Requirements */}
-                  <div>
+                  {(minutes.requirements?.length ?? 0) > 0 && <div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.meetingRequirements}</p>
                     <div className="space-y-1">
-                      {minutes.requirements.map((req, i) => (
+                      {minutes.requirements?.map((req, i) => (
                         <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
                           <span className="text-green-500 mt-0.5 flex-shrink-0">&#10003;</span>
                           <span>{req}</span>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </div>}
 
-                  {/* Action Items */}
-                  {minutes.actionItems.length > 0 && (
+                  {/* Action Items (structured) */}
+                  {minutes.actionItems?.length > 0 && (
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.meetingActionItems}</p>
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         {minutes.actionItems.map((item, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600 p-2 bg-slate-50 rounded-lg border border-slate-100">
                             <span className="text-blue-500 mt-0.5 flex-shrink-0">&#9679;</span>
-                            <span>{item}</span>
+                            <div className="flex-1">
+                              <span className="text-slate-800">{typeof item === 'string' ? item : item.task}</span>
+                              {typeof item !== 'string' && (
+                                <div className="flex gap-3 mt-1">
+                                  <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold rounded">{t.meetingActionAssignee}: {item.assignee}</span>
+                                  <span className="px-1.5 py-0.5 bg-slate-200 text-slate-600 text-[9px] font-bold rounded">{t.meetingActionDeadline}: {item.deadline}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1055,7 +1153,7 @@ export function useChat() {
                   )}
 
                   {/* Data Gaps */}
-                  {minutes.dataGaps && minutes.dataGaps.length > 0 && (
+                  {minutes.dataGaps?.length > 0 && (
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.additionalCheck}</p>
                       <div className="space-y-1">
@@ -1070,15 +1168,15 @@ export function useChat() {
                   )}
 
                   {/* Design Keywords */}
-                  <div className="pt-3 border-t border-slate-100">
+                  {minutes.designKeywords && <div className="pt-3 border-t border-slate-100">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.designKeywords}</p>
                     <div className="grid grid-cols-1 gap-1.5">
                       {[
-                        { label: '배경', value: minutes.designKeywords.background },
-                        { label: '모델', value: minutes.designKeywords.model },
-                        { label: '프로세스', value: minutes.designKeywords.process },
-                        { label: '기술', value: minutes.designKeywords.tech },
-                        { label: '목표', value: minutes.designKeywords.goal },
+                        { label: t.designKwBackground, value: minutes.designKeywords?.background ?? '' },
+                        { label: t.designKwModel, value: minutes.designKeywords?.model ?? '' },
+                        { label: t.designKwProcess, value: minutes.designKeywords?.process ?? '' },
+                        { label: t.designKwTech, value: minutes.designKeywords?.tech ?? '' },
+                        { label: t.designKwGoal, value: minutes.designKeywords?.goal ?? '' },
                       ].map((kw, i) => (
                         <div key={i} className="flex items-start gap-2">
                           <span className="flex-shrink-0 px-1.5 py-0.5 bg-slate-900 text-white text-[9px] font-bold rounded">{kw.label}</span>
@@ -1086,7 +1184,22 @@ export function useChat() {
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </div>}
+
+                  {/* Future Planning */}
+                  {minutes.futurePlanning?.length > 0 && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.meetingFuturePlanning}</p>
+                      <div className="space-y-1">
+                        {minutes.futurePlanning.map((plan, i) => (
+                          <div key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                            <span className="text-indigo-400 mt-0.5 flex-shrink-0">&#10148;</span>
+                            <span>{plan}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1095,16 +1208,33 @@ export function useChat() {
         );
 
         // Store as context (flatten to text for blueprint prompt)
-        const contextText = [
+        const contextParts = [
           `[회의록: ${minutes.meetingTitle}]`,
-          `요약: ${minutes.overview}`,
-          `요구사항: ${minutes.requirements.join('; ')}`,
-          `배경: ${minutes.designKeywords.background}`,
-          `모델: ${minutes.designKeywords.model}`,
-          `프로세스: ${minutes.designKeywords.process}`,
-          `기술: ${minutes.designKeywords.tech}`,
-          `목표: ${minutes.designKeywords.goal}`,
-        ].join('\n');
+          `핵심요약: ${minutes.executiveSummary}`,
+          `배경: ${minutes.overview}`,
+        ];
+        if (minutes.keyDecisions?.length > 0) {
+          contextParts.push(`결정사항: ${minutes.keyDecisions.map(d => d.decision).join('; ')}`);
+        }
+        if (minutes.requirements?.length > 0) {
+          contextParts.push(`요구사항: ${minutes.requirements.join('; ')}`);
+        }
+        if (minutes.designKeywords) {
+          contextParts.push(
+            `비즈니스배경: ${minutes.designKeywords.background ?? ''}`,
+            `시스템모델: ${minutes.designKeywords.model ?? ''}`,
+            `프로세스: ${minutes.designKeywords.process ?? ''}`,
+            `기술환경: ${minutes.designKeywords.tech ?? ''}`,
+            `목표: ${minutes.designKeywords.goal ?? ''}`,
+          );
+        }
+        if (minutes.actionItems?.length > 0) {
+          contextParts.push(`후속조치: ${minutes.actionItems.map(a => typeof a === 'string' ? a : `${a.task} (${a.assignee}, ${a.deadline})`).join('; ')}`);
+        }
+        if (minutes.futurePlanning?.length > 0) {
+          contextParts.push(`향후계획: ${minutes.futurePlanning.join('; ')}`);
+        }
+        const contextText = contextParts.join('\n');
         addAdditionalContext(contextText);
 
         // Guide message
@@ -1116,8 +1246,18 @@ export function useChat() {
           } />,
           Sender.BOT,
         );
-      } catch {
-        addMessage(<T render={(t) => t.voiceAnalysisFailed} />, Sender.BOT);
+      } catch (err) {
+        console.error('[Audio] handleUploadAudio error:', err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        addMessage(
+          <T render={(t) =>
+            <div className="space-y-2">
+              <p>{t.voiceAnalysisFailed}</p>
+              <p className="text-[10px] text-red-400 font-mono break-all">{errMsg}</p>
+            </div>
+          } />,
+          Sender.BOT,
+        );
       } finally {
         setLoading(false);
       }

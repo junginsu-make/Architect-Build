@@ -4,6 +4,7 @@ import MessageInput from './components/MessageInput';
 import ResultPanel from './components/ResultPanel';
 // import TranslationHub from './components/TranslationHub'; // 비활성화됨
 import IntakeForm from './components/intake/IntakeForm';
+import LandingPage from './components/landing/LandingPage';
 import { translations } from './translations';
 import { useChat } from './hooks/useChat.tsx';
 import { useUIStore } from './store/uiStore';
@@ -16,7 +17,7 @@ const App: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const { messages, isLoading, chatPhase, handleSendMessage, handleUploadDocuments, handleUploadText, handleUploadAudio, triggerBlueprint } = useChat();
-  const { lang, showGuide, intakeMode, activePanel, toggleGuide, setIntakeMode, toggleLang, setActivePanel } = useUIStore();
+  const { lang, showGuide, intakeMode, activePanel, showLanding, toggleGuide, setIntakeMode, toggleLang, setActivePanel } = useUIStore();
   const blueprint = useDeliverableStore((s) => s.blueprint);
   const blueprintLang = useDeliverableStore((s) => s.blueprintLang);
   const translatedBlueprints = useDeliverableStore((s) => s.translatedBlueprints);
@@ -87,6 +88,10 @@ const App: React.FC = () => {
 
     triggerBlueprint(userResponses);
   };
+
+  if (showLanding) {
+    return <LandingPage lang={lang} />;
+  }
 
   return (
     <div className="flex h-screen w-full bg-[#f8fafc] overflow-hidden relative">

@@ -3,6 +3,7 @@ import { Type } from "@google/genai";
 import { Language } from "../types";
 import { getGeminiClient, checkApiKey } from "./geminiClient";
 import type { ImplementationPlan } from "./claudeService";
+import type { FrontendDesignPlan } from "./frontendDesignService";
 import { findRelevantDocs } from "./techReference";
 
 function getAI() {
@@ -15,12 +16,32 @@ export interface MeetingTopic {
     speakers: string;
 }
 
+export interface MeetingDecision {
+    decision: string;
+    rationale: string;
+}
+
+export interface MeetingOption {
+    name: string;
+    evaluation: string;
+}
+
+export interface MeetingActionItem {
+    task: string;
+    assignee: string;
+    deadline: string;
+}
+
 export interface MeetingMinutes {
     meetingTitle: string;
+    executiveSummary: string;
     overview: string;
+    keyDecisions: MeetingDecision[];
+    optionsEvaluation: MeetingOption[];
     keyTopics: MeetingTopic[];
+    detailedFeedback: string[];
     requirements: string[];
-    actionItems: string[];
+    actionItems: MeetingActionItem[];
     dataGaps: string[];
     designKeywords: {
         background: string;
@@ -29,6 +50,7 @@ export interface MeetingMinutes {
         tech: string;
         goal: string;
     };
+    futurePlanning: string[];
 }
 
 export interface FollowUpQuestion {
@@ -69,6 +91,7 @@ export interface SolutionBlueprint {
     sources?: GroundingSource[];
     clientProposal?: ClientProposal;
     implementationPlan?: ImplementationPlan;
+    frontendDesignPlan?: FrontendDesignPlan;
 }
 
 export type EnterpriseQuestionType = 'COMPANY_CONTEXT' | 'SOLUTION_MODEL' | 'MODULE_LOGIC' | 'TECH_INTEGRATION' | 'BUSINESS_GOAL';
@@ -494,26 +517,56 @@ export const analyzeAudio = async (base64Data: string, mimeType: string, lang: L
 ${langText}
 
 단순히 말을 받아적지 말고, 비즈니스 관점에서 재구성하여 전문적인 톤으로 작성하세요.
+음성이 불분명하거나 내용이 짧더라도 반드시 모든 필드를 채워서 응답하세요.
+빈 배열이 필요한 경우 []로, 빈 문자열이 필요한 경우 적절한 기본값을 넣으세요.
 
 각 필드 설명:
 - meetingTitle: 회의 주제를 한 줄로 정의 (예: "물류 관리 시스템 도입 논의")
-- overview: 회의 전체 내용을 2~3문장으로 요약
-- keyTopics: 주요 논의된 안건들 (최소 3개). 각 안건의 title(안건명), summary(논의 내용 요약), speakers(발언자 또는 "참석자")
+- executiveSummary: 경영진이 30초 안에 파악할 수 있는 고밀도 핵심 요약 (한 단락, 5~7문장). 회의의 목적, 핵심 결정사항, 주요 쟁점, 최종 합의 방향을 모두 포함
+- overview: 회의 배경과 목적, 참석 맥락을 2~3문장으로 서술
+- keyDecisions: 회의에서 확정된 결정 사항들 (최소 2개). 각 항목의 decision(결정 내용)과 rationale(결정 근거/배경)
+- optionsEvaluation: 회의에서 검토된 대안/옵션들의 평가. 각 항목의 name(옵션명)과 evaluation(평가 내용). 대안 비교가 없었으면 빈 배열
+- keyTopics: 주요 전략적 논의 사항들 (최소 3개). 각 안건의 title(안건명), summary(찬반 의견과 논의 과정 포함 상세 요약), speakers(발언자 또는 "참석자")
+- detailedFeedback: 구체적 항목별 피드백/지적 사항 (기능, UI, 프로세스 등 세부 수정/개선 요청). 해당 없으면 빈 배열
 - requirements: 회의에서 도출된 핵심 요구사항 목록 (구체적이고 실행 가능한 항목)
-- actionItems: 후속 조치 사항 (누가 무엇을 할지)
+- actionItems: 후속 조치 사항. 각 항목의 task(작업 내용), assignee(담당자/팀 또는 "미정"), deadline(마감일 또는 "미정")
 - dataGaps: 회의에서 언급되지 않았지만 시스템 설계에 필요한 추가 확인 사항
 - designKeywords: 시스템 설계에 반영할 5가지 핵심 요소
   - background: 비즈니스 배경 및 현재 문제점
   - model: 도입 희망 시스템 모델 (SaaS, 관리자 도구, 모바일 앱 등)
   - process: 핵심 업무 프로세스 및 사용자 흐름
   - tech: 기술 환경 및 연동 필요 시스템
-  - goal: 최종 비즈니스 목표 및 성공 지표`;
+  - goal: 최종 비즈니스 목표 및 성공 지표
+- futurePlanning: 후속 프로젝트, 장기 전략, 다음 회의에서 이어갈 주제 (최소 1개). 언급 없으면 빈 배열`;
 
   const responseSchema = {
     type: Type.OBJECT,
     properties: {
       meetingTitle: { type: Type.STRING },
+      executiveSummary: { type: Type.STRING },
       overview: { type: Type.STRING },
+      keyDecisions: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            decision: { type: Type.STRING },
+            rationale: { type: Type.STRING },
+          },
+          required: ["decision", "rationale"],
+        },
+      },
+      optionsEvaluation: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            evaluation: { type: Type.STRING },
+          },
+          required: ["name", "evaluation"],
+        },
+      },
       keyTopics: {
         type: Type.ARRAY,
         items: {
@@ -526,8 +579,20 @@ ${langText}
           required: ["title", "summary", "speakers"],
         },
       },
+      detailedFeedback: { type: Type.ARRAY, items: { type: Type.STRING } },
       requirements: { type: Type.ARRAY, items: { type: Type.STRING } },
-      actionItems: { type: Type.ARRAY, items: { type: Type.STRING } },
+      actionItems: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            task: { type: Type.STRING },
+            assignee: { type: Type.STRING },
+            deadline: { type: Type.STRING },
+          },
+          required: ["task", "assignee", "deadline"],
+        },
+      },
       dataGaps: { type: Type.ARRAY, items: { type: Type.STRING } },
       designKeywords: {
         type: Type.OBJECT,
@@ -540,36 +605,51 @@ ${langText}
         },
         required: ["background", "model", "process", "tech", "goal"],
       },
+      futurePlanning: { type: Type.ARRAY, items: { type: Type.STRING } },
     },
-    required: ["meetingTitle", "overview", "keyTopics", "requirements", "actionItems", "dataGaps", "designKeywords"],
+    required: ["meetingTitle", "executiveSummary", "overview", "keyDecisions", "optionsEvaluation", "keyTopics", "detailedFeedback", "requirements", "actionItems", "dataGaps", "designKeywords", "futurePlanning"],
   };
 
-  try {
-    const response = await getAI().models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        {
-          parts: [
-            { inlineData: { data: base64Data, mimeType } },
-            { text: prompt },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        maxOutputTokens: 65536,
+  // Strip codecs parameter from MIME type (e.g. "audio/webm;codecs=opus" → "audio/webm")
+  const cleanMimeType = mimeType.split(';')[0].trim();
+
+  const response = await getAI().models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: [
+      {
+        parts: [
+          { inlineData: { data: base64Data, mimeType: cleanMimeType } },
+          { text: prompt },
+        ],
       },
-    });
-    try {
-      return JSON.parse(response.text?.trim() ?? '{}') as MeetingMinutes;
-    } catch {
-      throw new Error('회의록 분석 결과를 파싱할 수 없습니다.');
-    }
-  } catch (error) {
-    console.error("Audio Analysis Error:", error);
-    throw new Error("음성 분석에 실패했습니다.");
+    ],
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema,
+      maxOutputTokens: 65536,
+    },
+  });
+
+  const text = response.text?.trim();
+  if (!text) {
+    throw new Error('Gemini returned empty response for audio analysis');
   }
+
+  const parsed = JSON.parse(text) as MeetingMinutes;
+
+  // Ensure critical arrays exist (defensive against incomplete responses)
+  if (!parsed.keyTopics) parsed.keyTopics = [];
+  if (!parsed.requirements) parsed.requirements = [];
+  if (!parsed.actionItems) parsed.actionItems = [];
+  if (!parsed.dataGaps) parsed.dataGaps = [];
+  if (!parsed.designKeywords || typeof parsed.designKeywords !== 'object') {
+    parsed.designKeywords = { background: '', model: '', process: '', tech: '', goal: '' };
+  } else {
+    const dkDefaults = { background: '', model: '', process: '', tech: '', goal: '' };
+    parsed.designKeywords = { ...dkDefaults, ...parsed.designKeywords };
+  }
+
+  return parsed;
 };
 
 export const generateFollowUpQuestion = async (

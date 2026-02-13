@@ -18,6 +18,10 @@ export function getGeminiClient(): GoogleGenAI {
   return _client;
 }
 
+export function hasGeminiApiKey(): boolean {
+  return !!getApiKey();
+}
+
 export function checkApiKey(lang: Language): void {
   const key = getApiKey();
   if (!key) {

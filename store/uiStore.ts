@@ -7,12 +7,14 @@ interface UIState {
   showGuide: boolean;
   activePanel: 'chat' | 'result';
   intakeMode: IntakeMode;
+  showLanding: boolean;
 
   setLang: (lang: Language) => void;
   toggleLang: () => void;
   toggleGuide: () => void;
   setActivePanel: (panel: 'chat' | 'result') => void;
   setIntakeMode: (mode: IntakeMode) => void;
+  setShowLanding: (show: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -20,6 +22,7 @@ export const useUIStore = create<UIState>((set) => ({
   showGuide: false,
   activePanel: 'chat',
   intakeMode: 'chat',
+  showLanding: true,
 
   setLang: (lang) => set({ lang }),
   toggleLang: () =>
@@ -27,4 +30,5 @@ export const useUIStore = create<UIState>((set) => ({
   toggleGuide: () => set((s) => ({ showGuide: !s.showGuide })),
   setActivePanel: (panel) => set({ activePanel: panel }),
   setIntakeMode: (mode) => set({ intakeMode: mode }),
+  setShowLanding: (show) => set({ showLanding: show }),
 }));

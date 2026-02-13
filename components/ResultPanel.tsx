@@ -4,6 +4,7 @@ import { SolutionBlueprint } from '../services/geminiService';
 import { Language } from '../types';
 import { translations } from '../translations';
 import DownloadManager from './output/DownloadManager';
+import FrontendDesignTab from './design/FrontendDesignTab';
 
 interface ResultPanelProps {
   isLoading: boolean;
@@ -13,7 +14,7 @@ interface ResultPanelProps {
 }
 
 type ViewMode = 'developer' | 'client';
-type DevTab = 'roadmap' | 'architecture' | 'implementation' | 'documents';
+type DevTab = 'roadmap' | 'architecture' | 'implementation' | 'documents' | 'design';
 
 /* ── Markdown → JSX (enhanced) ── */
 const MarkdownText: React.FC<{ text: string; className?: string }> = ({ text, className = '' }) => {
@@ -198,6 +199,51 @@ const MarkdownText: React.FC<{ text: string; className?: string }> = ({ text, cl
   return <div className={`space-y-3 ${className}`}>{elements}</div>;
 };
 
+/* ── Mermaid sanitizer ── */
+function sanitizeMermaid(raw: string): string {
+  // 1. Unescape literal \n and \t
+  let code = raw.replace(/\\n/g, '\n').replace(/\\t/g, '  ');
+
+  // 2. Remove markdown code fences if present
+  code = code.replace(/^```(?:mermaid)?\s*/m, '').replace(/```\s*$/m, '').trim();
+
+  // 3. Ensure first line has a valid diagram type
+  const firstLine = code.split('\n')[0].trim();
+  const validStarts = ['graph ', 'flowchart ', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'erDiagram', 'gantt', 'pie', 'gitgraph', 'mindmap', 'timeline', 'C4', 'block-beta'];
+  if (!validStarts.some(s => firstLine.startsWith(s))) {
+    // Try to find a valid start within the first few lines
+    const lines = code.split('\n');
+    const startIdx = lines.findIndex(l => validStarts.some(s => l.trim().startsWith(s)));
+    if (startIdx > 0) {
+      code = lines.slice(startIdx).join('\n');
+    }
+  }
+
+  // 4. Fix common Gemini issues in labels
+  const lines = code.split('\n');
+  const fixed = lines.map(line => {
+    // Remove zero-width spaces and other invisible chars
+    let l = line.replace(/[\u200B-\u200F\uFEFF]/g, '');
+    // Fix double arrows (==>) that should be (-->)
+    l = l.replace(/==>/g, '-->');
+    // Fix triple dashes (--->) to (-->)
+    l = l.replace(/-{3,}>/g, '-->');
+    // Fix labels with unescaped quotes inside brackets: ["label"] → [label]
+    l = l.replace(/\["([^"]*?)"\]/g, '[$1]');
+    // Escape parentheses inside bracket labels to prevent Mermaid parsing them as shape tokens
+    // e.g. AuthSvc[인증 서비스 (Auth0/JWT)] → AuthSvc[인증 서비스 #40;Auth0/JWT#41;]
+    l = l.replace(/\[([^\]]*)\]/g, (_match, content: string) => {
+      if (content.includes('(') || content.includes(')')) {
+        return '[' + content.replace(/\(/g, '#40;').replace(/\)/g, '#41;') + ']';
+      }
+      return '[' + content + ']';
+    });
+    return l;
+  });
+
+  return fixed.join('\n');
+}
+
 /* ── Mermaid diagram ── */
 const Mermaid: React.FC<{
   chart: string; title?: string; onExpand?: () => void; onDownload?: () => void; lang?: Language;
@@ -212,7 +258,7 @@ const Mermaid: React.FC<{
       setIsRendering(true);
       setError(false);
       ref.current.removeAttribute('data-processed');
-      const normalized = chart.replace(/\\n/g, '\n').replace(/\\t/g, '  ');
+      const normalized = sanitizeMermaid(chart);
       ref.current.textContent = normalized;
       const renderDiagram = async () => {
         // Wait for Mermaid CDN
@@ -221,11 +267,20 @@ const Mermaid: React.FC<{
         }
         if (!(window as any).mermaid) { setError(true); setIsRendering(false); return; }
 
+        // Re-initialize mermaid to clear any stale state from previous failed renders
+        try {
+          (window as any).mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' });
+        } catch { /* ignore init errors */ }
+
         // Retry up to 3 times with increasing delay (handles concurrent render conflicts)
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             if (!ref.current) break;
+            // Generate unique ID for this render to avoid conflicts
+            const uniqueId = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
             ref.current.removeAttribute('data-processed');
+            ref.current.removeAttribute('data-mermaid-processed');
+            ref.current.id = uniqueId;
             ref.current.textContent = normalized;
             await new Promise(r => setTimeout(r, 300 + attempt * 500));
             await (window as any).mermaid.run({ nodes: [ref.current] });
@@ -239,7 +294,8 @@ const Mermaid: React.FC<{
             setIsRendering(false);
             return;
           } catch (err) {
-            console.warn(`[Mermaid] Render attempt ${attempt + 1} failed:`, err);
+            const errMsg = err instanceof Error ? err.message : JSON.stringify(err);
+            console.warn(`[Mermaid] Render attempt ${attempt + 1} failed:`, errMsg);
             if (attempt === 2) { setError(true); setIsRendering(false); }
           }
         }
@@ -302,11 +358,13 @@ const DiagramModal: React.FC<{ chart: string; title: string; onClose: () => void
   useEffect(() => {
     if (ref.current && chart) {
       ref.current.removeAttribute('data-processed');
-      const normalized = chart.replace(/\\n/g, '\n').replace(/\\t/g, '  ');
+      const normalized = sanitizeMermaid(chart);
       ref.current.textContent = normalized;
       const render = async () => {
         try {
           if ((window as any).mermaid) {
+            const uniqueId = `mermaid-modal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            ref.current!.id = uniqueId;
             await new Promise(r => setTimeout(r, 200));
             await (window as any).mermaid.run({ nodes: [ref.current] });
             const svg = ref.current?.querySelector('svg');
@@ -745,6 +803,82 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, isTranslating, blu
                     </div>
                   </div>
                 </SectionCard>
+
+                {/* 8. UI Design Preview (if available) */}
+                {blueprint.frontendDesignPlan && (
+                  <SectionCard>
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-teal-600"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25" /></svg>
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 mb-1">{t.clientUIDesign}</h3>
+                        <p className="text-xs text-slate-500">{t.clientUIDesignDesc}</p>
+                      </div>
+                    </div>
+
+                    {/* Page list */}
+                    {blueprint.frontendDesignPlan.pageFlow?.pages?.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">{t.clientPageFlow}</p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {blueprint.frontendDesignPlan.pageFlow.pages.map((page, i) => (
+                            <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-teal-50/50 border border-teal-100">
+                              <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-teal-100 flex items-center justify-center">
+                                <span className="text-[10px] font-bold text-teal-700">{String(i + 1).padStart(2, '0')}</span>
+                              </div>
+                              <div>
+                                <span className="text-sm font-semibold text-slate-800">{page.name}</span>
+                                <p className="text-xs text-slate-500">{page.description}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mockup images grid */}
+                    {blueprint.frontendDesignPlan.uiMockups?.length > 0 && (
+                      <div className="grid grid-cols-2 gap-3">
+                        {blueprint.frontendDesignPlan.uiMockups.map((m, i) => (
+                          <div key={i} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                            <div className="aspect-[4/3] bg-slate-50">
+                              <img
+                                src={m.imageBase64.startsWith('PHN2') ? `data:image/svg+xml;base64,${m.imageBase64}` : `data:image/png;base64,${m.imageBase64}`}
+                                alt={m.pageName}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="p-2">
+                              <p className="text-xs font-semibold text-slate-700">{m.pageName}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Wireframe previews if no mockups */}
+                    {(!blueprint.frontendDesignPlan.uiMockups || blueprint.frontendDesignPlan.uiMockups.length === 0) &&
+                     blueprint.frontendDesignPlan.htmlWireframes?.length > 0 && (
+                      <div className="grid grid-cols-1 gap-3">
+                        {blueprint.frontendDesignPlan.htmlWireframes.slice(0, 3).map((wf, i) => (
+                          <div key={i} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                            <iframe
+                              srcDoc={wf.htmlCode}
+                              sandbox="allow-scripts allow-same-origin"
+                              className="w-full h-[200px] border-0 bg-white pointer-events-none"
+                              title={wf.pageName}
+                            />
+                            <div className="p-2 border-t border-slate-100">
+                              <p className="text-xs font-semibold text-slate-700">{wf.pageName}</p>
+                              <p className="text-[10px] text-slate-400">{wf.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </SectionCard>
+                )}
               </>
             ) : (
               /* Fallback: existing format */
@@ -809,6 +943,7 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, isTranslating, blu
     { key: 'architecture', label: t.architectureTab, show: true },
     { key: 'implementation', label: t.implementationTab, show: true },
     { key: 'documents', label: t.documentsTab, show: true },
+    { key: 'design', label: t.designTab, show: true },
   ];
   const visibleTabs = tabs.filter(tb => tb.show);
 
@@ -1456,6 +1591,11 @@ const ResultPanel: React.FC<ResultPanelProps> = ({ isLoading, isTranslating, blu
               </div>
             </div>
           ))}
+
+          {/* ── Frontend Design ── */}
+          {activeTab === 'design' && (
+            <FrontendDesignTab plan={blueprint.frontendDesignPlan} lang={lang} />
+          )}
 
         </div>
       </div>

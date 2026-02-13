@@ -21,7 +21,8 @@ No test framework is configured. No linter is configured.
 Defined in `.env.local` at project root (loaded by Vite's `loadEnv` from `.`):
 
 - `GEMINI_API_KEY` — Required. Exposed as both `process.env.API_KEY` and `process.env.GEMINI_API_KEY` via Vite `define`.
-- `ANTHROPIC_API_KEY` — Optional. Falls back to empty string; Claude features degrade gracefully via `hasClaudeApiKey()`.
+- `ANTHROPIC_API_KEY` — Optional. Falls back to empty string; part of multi-model fallback chain for implementation plan generation.
+- `OPENAI_API_KEY` — Optional. Falls back to empty string; tertiary fallback for implementation plan generation (Claude → Gemini → GPT).
 
 API keys are injected at build time through `vite.config.ts` `define` — they are **not** runtime env vars.
 
@@ -41,9 +42,9 @@ Persistence Layer (Zustand stores + Dexie/IndexedDB)
 
 1. **Phases 1–5**: `useChat.tsx` drives a multi-turn chat collecting business background, solution model, process logic, tech environment, and KPI goals. Each phase calls `geminiService.generateFollowUpQuestion()`.
 2. **Phase 6**: Approval checkpoint with exact-match regex validation (`^확인$|^승인$|^Approve$|^Confirm$`).
-3. **Phase 7**: Parallel generation via `Promise.allSettled`:
+3. **Phase 7**: Parallel generation via `Promise.all`:
    - Gemini (`generateSolutionBlueprint`) → client proposal + blueprint with Google Search grounding
-   - Claude (`generateImplementationPlan`) → PRD/LLD/sprint/API/DB design (graceful skip if no API key)
+   - Multi-model fallback (`generateImplementationPlan`) → PRD/LLD/sprint/API/DB design with Claude → Gemini → GPT fallback chain (never fails)
 4. **Phase 8**: Free-form chat continuation maintaining full context.
 
 ### State Management — 4 Zustand Stores
@@ -63,7 +64,9 @@ Stores are independent (no cross-store dependencies). Access via `useChatStore()
 | `gemini-3-flash-preview` | Follow-up questions, free chat, translation | 8192 (Q&A) / 65536 (translation) | `generateFollowUpQuestion`, `generateContinuingChat`, `translateBlueprint` |
 | `gemini-2.5-flash` | Document/image vision analysis, audio analysis, AI merge | 65536 | `analyzeDocument`, `analyzeDocumentSmart`, `analyzeAudio`, `mergeDocumentAnalysesWithAI` |
 | `gemini-2.5-flash-native-audio` | Live bidirectional translation | — | `liveTranslationService` |
-| `claude-sonnet-4-5-20250929` | Implementation plan (PRD/LLD/code) | — | `generateImplementationPlan` |
+| `claude-sonnet-4-5-20250929` | Implementation plan primary (PRD/LLD/code) | 64000 | `generateImplementationPlan` (via fallback chain) |
+| `gemini-2.5-pro` | Implementation plan fallback | 65536 | `generateImplementationPlan` (Gemini fallback) |
+| `gpt-4.1` | Implementation plan tertiary fallback | 64000 | `generateImplementationPlan` (GPT fallback) |
 
 ### Key Patterns
 

@@ -74,7 +74,7 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose
     for (const type of types) {
       if (MediaRecorder.isTypeSupported(type)) return type;
     }
-    return '';
+    return 'audio/webm'; // fallback to webm (most widely supported)
   };
 
   const startRecording = async () => {
@@ -113,6 +113,11 @@ const VoiceRecorderModal: React.FC<VoiceRecorderModalProps> = ({ isOpen, onClose
 
         reader.onloadend = () => {
           const base64 = (reader.result as string).split(',')[1];
+          if (!base64) {
+            setError(t.conversionFailed);
+            setIsProcessing(false);
+            return;
+          }
           onUploadAudio(base64, finalMimeType);
           setIsProcessing(false);
           onClose();

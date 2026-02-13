@@ -225,6 +225,55 @@ const DownloadManager: React.FC<DownloadManagerProps> = ({ blueprint, lang }) =>
         zip.file('diagrams/tech-stack.mmd', bp.techStackGraph);
       }
 
+      // ── frontend-design/ ──
+      if (bp.frontendDesignPlan) {
+        const fd = bp.frontendDesignPlan;
+
+        // Page flow Mermaid diagram
+        if (fd.pageFlow?.mermaidDiagram) {
+          zip.file('frontend-design/page-flow.mmd', fd.pageFlow.mermaidDiagram);
+        }
+
+        // Component architecture Mermaid diagram
+        if (fd.componentArchitecture?.mermaidDiagram) {
+          zip.file('frontend-design/component-tree.mmd', fd.componentArchitecture.mermaidDiagram);
+        }
+
+        // Design tokens JSON
+        if (fd.designTokens) {
+          zip.file('frontend-design/design-tokens.json', JSON.stringify(fd.designTokens, null, 2));
+        }
+
+        // Frontend tech stack JSON
+        if (fd.frontendTechStack?.length) {
+          zip.file('frontend-design/tech-stack.json', JSON.stringify(fd.frontendTechStack, null, 2));
+        }
+
+        // HTML wireframes
+        if (fd.htmlWireframes?.length) {
+          for (let i = 0; i < fd.htmlWireframes.length; i++) {
+            const wf = fd.htmlWireframes[i];
+            zip.file(`frontend-design/wireframes/${String(i + 1).padStart(2, '0')}-${wf.pageName}.html`, wf.htmlCode);
+          }
+        }
+
+        // UI mockup images (base64 → binary SVG or PNG)
+        if (fd.uiMockups?.length) {
+          for (let i = 0; i < fd.uiMockups.length; i++) {
+            const mockup = fd.uiMockups[i];
+            if (mockup.imageBase64) {
+              const isSvg = mockup.imageBase64.startsWith('PHN2');
+              const ext = isSvg ? 'svg' : 'png';
+              zip.file(
+                `frontend-design/mockups/${String(i + 1).padStart(2, '0')}-${mockup.pageName}.${ext}`,
+                mockup.imageBase64,
+                { base64: true },
+              );
+            }
+          }
+        }
+      }
+
       // ── report.md (root) ──
       const isKoReport = reportLang === Language.KO;
       const mdContent = [
