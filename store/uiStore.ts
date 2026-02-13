@@ -18,7 +18,7 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  lang: Language.KO,
+  lang: Language.EN,
   showGuide: false,
   activePanel: 'chat',
   intakeMode: 'chat',

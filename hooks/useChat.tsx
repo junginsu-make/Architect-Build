@@ -28,8 +28,6 @@ const QUESTION_TYPES: EnterpriseQuestionType[] = [
   'BUSINESS_GOAL',
 ];
 
-const SECTION_LABELS = ['비즈니스 배경', '시스템 모델', '업무 프로세스', '기술 환경', '성공 지표'];
-
 // Reactive translation wrapper — re-renders when language changes in the store
 type TStrings = (typeof translations)[Language.KO];
 function T({ render }: { render: (t: TStrings) => ReactNode }) {
@@ -873,11 +871,11 @@ export function useChat() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t.designKeywords}</p>
                     <div className="grid grid-cols-1 gap-1.5">
                       {[
-                        { label: '배경', value: doc.designKeywords.background },
-                        { label: '모델', value: doc.designKeywords.model },
-                        { label: '프로세스', value: doc.designKeywords.process },
-                        { label: '기술', value: doc.designKeywords.tech },
-                        { label: '목표', value: doc.designKeywords.goal },
+                        { label: t.designKwBackground, value: doc.designKeywords.background },
+                        { label: t.designKwModel, value: doc.designKeywords.model },
+                        { label: t.designKwProcess, value: doc.designKeywords.process },
+                        { label: t.designKwTech, value: doc.designKeywords.tech },
+                        { label: t.designKwGoal, value: doc.designKeywords.goal },
                       ].map((kw, i) => (
                         <div key={i} className="flex items-start gap-2">
                           <span className="flex-shrink-0 px-1.5 py-0.5 bg-slate-900 text-white text-[9px] font-bold rounded">{kw.label}</span>
@@ -894,15 +892,15 @@ export function useChat() {
         );
 
         // Store as context
+        const ct = translations[stateRef.current.lang];
         const contextText = [
-          `[문서 분석: ${doc.title}]`,
-          `요약: ${doc.overview}`,
-          `배경: ${doc.designKeywords.background}`,
-          `모델: ${doc.designKeywords.model}`,
-          `프로세스: ${doc.designKeywords.process}`,
-          `기술: ${doc.designKeywords.tech}`,
-          `목표: ${doc.designKeywords.goal}`,
-          `핵심 발견: ${doc.keyFindings.join('; ')}`,
+          `[${ct.docAnalysisLabel}: ${doc.title}]`,
+          `${ct.designKwBackground}: ${doc.designKeywords.background}`,
+          `${ct.designKwModel}: ${doc.designKeywords.model}`,
+          `${ct.designKwProcess}: ${doc.designKeywords.process}`,
+          `${ct.designKwTech}: ${doc.designKeywords.tech}`,
+          `${ct.designKwGoal}: ${doc.designKeywords.goal}`,
+          `${ct.keyFindings}: ${doc.keyFindings.join('; ')}`,
         ].join('\n');
         addAdditionalContext(contextText);
 
@@ -975,15 +973,15 @@ export function useChat() {
           Sender.BOT,
         );
 
+        const ct2 = translations[stateRef.current.lang];
         const contextText = [
-          `[문서 분석: ${doc.title}]`,
-          `요약: ${doc.overview}`,
-          `배경: ${doc.designKeywords.background}`,
-          `모델: ${doc.designKeywords.model}`,
-          `프로세스: ${doc.designKeywords.process}`,
-          `기술: ${doc.designKeywords.tech}`,
-          `목표: ${doc.designKeywords.goal}`,
-          `핵심 발견: ${doc.keyFindings.join('; ')}`,
+          `[${ct2.docAnalysisLabel}: ${doc.title}]`,
+          `${ct2.designKwBackground}: ${doc.designKeywords.background}`,
+          `${ct2.designKwModel}: ${doc.designKeywords.model}`,
+          `${ct2.designKwProcess}: ${doc.designKeywords.process}`,
+          `${ct2.designKwTech}: ${doc.designKeywords.tech}`,
+          `${ct2.designKwGoal}: ${doc.designKeywords.goal}`,
+          `${ct2.keyFindings}: ${doc.keyFindings.join('; ')}`,
         ].join('\n');
         addAdditionalContext(contextText);
 
@@ -1208,31 +1206,32 @@ export function useChat() {
         );
 
         // Store as context (flatten to text for blueprint prompt)
+        const mt = translations[stateRef.current.lang];
         const contextParts = [
-          `[회의록: ${minutes.meetingTitle}]`,
-          `핵심요약: ${minutes.executiveSummary}`,
-          `배경: ${minutes.overview}`,
+          `[${mt.ctxMeetingMinutes}: ${minutes.meetingTitle}]`,
+          `${mt.ctxExecutiveSummary}: ${minutes.executiveSummary}`,
+          `${mt.designKwBackground}: ${minutes.overview}`,
         ];
         if (minutes.keyDecisions?.length > 0) {
-          contextParts.push(`결정사항: ${minutes.keyDecisions.map(d => d.decision).join('; ')}`);
+          contextParts.push(`${mt.ctxDecisions}: ${minutes.keyDecisions.map(d => d.decision).join('; ')}`);
         }
         if (minutes.requirements?.length > 0) {
-          contextParts.push(`요구사항: ${minutes.requirements.join('; ')}`);
+          contextParts.push(`${mt.ctxRequirements}: ${minutes.requirements.join('; ')}`);
         }
         if (minutes.designKeywords) {
           contextParts.push(
-            `비즈니스배경: ${minutes.designKeywords.background ?? ''}`,
-            `시스템모델: ${minutes.designKeywords.model ?? ''}`,
-            `프로세스: ${minutes.designKeywords.process ?? ''}`,
-            `기술환경: ${minutes.designKeywords.tech ?? ''}`,
-            `목표: ${minutes.designKeywords.goal ?? ''}`,
+            `${mt.designKwBackground}: ${minutes.designKeywords.background ?? ''}`,
+            `${mt.designKwModel}: ${minutes.designKeywords.model ?? ''}`,
+            `${mt.designKwProcess}: ${minutes.designKeywords.process ?? ''}`,
+            `${mt.designKwTech}: ${minutes.designKeywords.tech ?? ''}`,
+            `${mt.designKwGoal}: ${minutes.designKeywords.goal ?? ''}`,
           );
         }
         if (minutes.actionItems?.length > 0) {
-          contextParts.push(`후속조치: ${minutes.actionItems.map(a => typeof a === 'string' ? a : `${a.task} (${a.assignee}, ${a.deadline})`).join('; ')}`);
+          contextParts.push(`${mt.ctxActionItems}: ${minutes.actionItems.map(a => typeof a === 'string' ? a : `${a.task} (${a.assignee}, ${a.deadline})`).join('; ')}`);
         }
         if (minutes.futurePlanning?.length > 0) {
-          contextParts.push(`향후계획: ${minutes.futurePlanning.join('; ')}`);
+          contextParts.push(`${mt.ctxFuturePlanning}: ${minutes.futurePlanning.join('; ')}`);
         }
         const contextText = contextParts.join('\n');
         addAdditionalContext(contextText);

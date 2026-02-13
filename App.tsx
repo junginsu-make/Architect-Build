@@ -70,15 +70,15 @@ const App: React.FC = () => {
     if (files && files.length > 0) {
       try {
         const analysis = await analyzeMultipleDocuments(files, lang);
+        const at = translations[lang];
         const contextText = [
-          `[문서 분석: ${analysis.title}]`,
-          `요약: ${analysis.overview}`,
-          `배경: ${analysis.designKeywords.background}`,
-          `모델: ${analysis.designKeywords.model}`,
-          `프로세스: ${analysis.designKeywords.process}`,
-          `기술: ${analysis.designKeywords.tech}`,
-          `목표: ${analysis.designKeywords.goal}`,
-          `핵심 발견: ${analysis.keyFindings.join('; ')}`,
+          `[${at.docAnalysisLabel}: ${analysis.title}]`,
+          `${at.designKwBackground}: ${analysis.designKeywords.background}`,
+          `${at.designKwModel}: ${analysis.designKeywords.model}`,
+          `${at.designKwProcess}: ${analysis.designKeywords.process}`,
+          `${at.designKwTech}: ${analysis.designKeywords.tech}`,
+          `${at.designKwGoal}: ${analysis.designKeywords.goal}`,
+          `${at.keyFindings}: ${analysis.keyFindings.join('; ')}`,
         ].join('\n');
         addAdditionalContext(contextText);
       } catch (err) {
