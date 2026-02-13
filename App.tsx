@@ -17,7 +17,7 @@ const App: React.FC = () => {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const { messages, isLoading, chatPhase, handleSendMessage, handleUploadDocuments, handleUploadText, handleUploadAudio, triggerBlueprint } = useChat();
-  const { lang, showGuide, intakeMode, activePanel, showLanding, toggleGuide, setIntakeMode, toggleLang, setActivePanel } = useUIStore();
+  const { lang, showGuide, intakeMode, activePanel, showLanding, toggleGuide, setIntakeMode, toggleLang, setActivePanel, setShowLanding } = useUIStore();
   const blueprint = useDeliverableStore((s) => s.blueprint);
   const blueprintLang = useDeliverableStore((s) => s.blueprintLang);
   const translatedBlueprints = useDeliverableStore((s) => s.translatedBlueprints);
@@ -97,13 +97,13 @@ const App: React.FC = () => {
     <div className="flex h-screen w-full bg-[#f8fafc] overflow-hidden relative">
       <div className={`flex flex-col w-full md:w-[450px] lg:w-[500px] h-full border-r border-slate-200 bg-white shadow-2xl z-20 relative ${activePanel !== 'chat' ? 'hidden md:flex' : 'flex'}`}>
         <header className="flex-shrink-0 bg-black text-white p-3 md:p-5 flex items-center justify-between shadow-lg">
-          <div className="flex items-center gap-3">
+          <button onClick={() => setShowLanding(true)} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-black shadow-inner shadow-white/20 text-xs">AI</div>
-            <div>
+            <div className="text-left">
               <h1 className="font-bold tracking-tight text-sm leading-none">{t.appTitle}</h1>
               <span className="text-blue-400 text-[10px] font-bold uppercase tracking-widest hidden sm:inline">{t.appSubtitle}</span>
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-1 md:gap-2">
             <div className="flex bg-white/10 rounded-lg overflow-hidden">
               <button
