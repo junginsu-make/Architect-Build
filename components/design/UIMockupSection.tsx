@@ -7,6 +7,11 @@ import type { UIMockup } from '../../services/frontendDesignService';
 const UIMockupSection: React.FC<{ mockups: UIMockup[]; lang: Language }> = ({ mockups, lang }) => {
   const t = designTranslations[lang];
   const [expandedMockup, setExpandedMockup] = useState<UIMockup | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
+
+  const handleImageError = (index: number) => {
+    setFailedImages(prev => new Set(prev).add(index));
+  };
 
   if (!mockups || mockups.length === 0) {
     return (
@@ -30,11 +35,21 @@ const UIMockupSection: React.FC<{ mockups: UIMockup[]; lang: Language }> = ({ mo
             onClick={() => setExpandedMockup(m)}
           >
             <div className="relative aspect-[4/3] bg-slate-50">
-              <img
-                src={m.imageBase64.startsWith('PHN2') ? `data:image/svg+xml;base64,${m.imageBase64}` : `data:image/png;base64,${m.imageBase64}`}
-                alt={m.pageName}
-                className="w-full h-full object-cover"
-              />
+              {failedImages.has(i) ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 text-slate-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 mb-2 text-slate-300">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                  </svg>
+                  <p className="text-xs font-medium">{t.mockupRenderFailed ?? 'Render failed'}</p>
+                </div>
+              ) : (
+                <img
+                  src={m.imageBase64.startsWith('PHN2') ? `data:image/svg+xml;base64,${m.imageBase64}` : `data:image/png;base64,${m.imageBase64}`}
+                  alt={m.pageName}
+                  className="w-full h-full object-cover"
+                  onError={() => handleImageError(i)}
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
               <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <span className="text-xs text-white/90 font-medium">{t.expandMockup}</span>

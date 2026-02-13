@@ -32,6 +32,7 @@ export const designTranslations: Record<Language, Record<string, string>> = {
 
     // Mockups
     expandMockup: '클릭하여 확대',
+    mockupRenderFailed: '이미지 렌더링 실패',
     noMockupsDesc: '이미지 목업이 생성되지 않았습니다.',
 
     // Wireframes
@@ -76,6 +77,7 @@ export const designTranslations: Record<Language, Record<string, string>> = {
     spacingLabel: 'Spacing System',
 
     expandMockup: 'Click to expand',
+    mockupRenderFailed: 'Render failed',
     noMockupsDesc: 'No UI mockups have been generated.',
 
     previewLabel: 'Preview',

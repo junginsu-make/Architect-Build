@@ -548,8 +548,7 @@ async function generateUIMockups(
     const page = pagesToGenerate[i];
     onProgress?.(i, pagesToGenerate.length);
 
-    try {
-      const prompt = `Generate a detailed SVG UI mockup for a web application page. Output ONLY the raw SVG code, no markdown, no explanation.
+    const prompt = `Generate a detailed SVG UI mockup for a web application page. Output ONLY the raw SVG code, no markdown, no explanation.
 
 Requirements:
 - SVG with viewBox="0 0 800 600"
@@ -560,6 +559,7 @@ Requirements:
 - Include drop shadow filter: <filter id="s"><feDropShadow dx="0" dy="1" stdDeviation="3" flood-opacity=".08"/></filter>
 - Show a realistic, detailed layout with proper spacing and visual hierarchy
 - Include text elements (<text>) for labels, numbers, section headers, and data
+- Ensure all XML tags are properly closed and nested
 - ${colorScheme}
 
 Page: "${page.name}" (${page.route})
@@ -575,23 +575,36 @@ Layout requirements:
 
 Output the complete SVG code starting with <svg and ending with </svg>.`;
 
-      const response = await getAI().models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          maxOutputTokens: 16384,
-          thinkingConfig: { thinkingBudget: 1024 },
-        },
-      });
+    // Try up to 2 attempts per mockup
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await getAI().models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            maxOutputTokens: 16384,
+            thinkingConfig: { thinkingBudget: 1024 },
+          },
+        });
 
-      let svgText = response.text?.trim() ?? '';
-      // Strip markdown code fences if present
-      svgText = svgText.replace(/```(?:svg|xml|html)?\s*/g, '').replace(/```\s*/g, '').trim();
-      // Extract SVG tag
-      const svgStart = svgText.indexOf('<svg');
-      const svgEnd = svgText.lastIndexOf('</svg>');
-      if (svgStart !== -1 && svgEnd !== -1) {
+        let svgText = response.text?.trim() ?? '';
+        // Strip markdown code fences if present
+        svgText = svgText.replace(/```(?:svg|xml|html)?\s*/g, '').replace(/```\s*/g, '').trim();
+        // Extract SVG tag
+        const svgStart = svgText.indexOf('<svg');
+        const svgEnd = svgText.lastIndexOf('</svg>');
+        if (svgStart === -1 || svgEnd === -1 || svgEnd <= svgStart) {
+          console.warn(`[FrontendDesign] Mockup for ${page.name}: no valid SVG tags (attempt ${attempt + 1})`);
+          continue; // retry
+        }
         svgText = svgText.slice(svgStart, svgEnd + 6);
+
+        // Validate: must contain at least some rect/circle/path elements
+        if (svgText.length < 200 || !(/<(rect|circle|path|text|line|g)\s/i.test(svgText))) {
+          console.warn(`[FrontendDesign] Mockup for ${page.name}: SVG too short or no shapes (attempt ${attempt + 1})`);
+          continue; // retry
+        }
+
         // Use Unicode-safe base64 encoding (btoa fails on non-ASCII chars like Korean)
         const base64 = btoa(unescape(encodeURIComponent(svgText)));
         mockups.push({
@@ -599,9 +612,10 @@ Output the complete SVG code starting with <svg and ending with </svg>.`;
           imageBase64: base64,
           description: page.description,
         });
+        break; // success, no retry needed
+      } catch (err) {
+        console.warn(`[FrontendDesign] Mockup generation failed for ${page.name} (attempt ${attempt + 1}):`, err);
       }
-    } catch (err) {
-      console.warn(`[FrontendDesign] Mockup generation failed for ${page.name}:`, err);
     }
   }
 
